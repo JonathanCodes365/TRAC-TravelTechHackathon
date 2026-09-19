@@ -1,58 +1,41 @@
-from fastapi import FastAPI
-#import fastapi so that python can create a web api.
-from pydantic import BaseModel
-#for validation
 from typing import Optional
-#for optional data.
+from enum import Enum
+
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+
+class ReportType(Enum):
+    RESCUE = "rescue"
+    MISSING = "missing"
+    INJURED = "injured"
+    SAFE = "safe"
+    INCIDENT = "incident"
+
 
 app = FastAPI()
-#this creates our fastapi application.
+
 
 class Report(BaseModel):
-    type:str
-    message:str
-
-    #it is not necessary for the users to know the location?
-    #he/she might be a tourist ?
-    location:optional[str]=None
-
-#here we create our pydantic checking for the incoming info:
-
-
-
-
-
-@app.get("/")
-#when someone sends a get request to /
-#use the function below.
-def home():
-    return{"message":"TRAC is running"}
-
-details = {
-    "project":"TRAC",
-    "purpose":"Tourism disaster coordination"
-}
-
-reports_response = {
-    "message":"Report received"
-}
+    type: ReportType
+    message: str
+    location: Optional[str] = None
 
 
 @app.get("/about")
 def about():
-    return details
+    return {"message": "TRAC disaster coordination API"}
 
 
 @app.post("/reports")
-def receive_reports(report:Report):
-    #This function is actually telling us: Take the incoming request from the body 
-    #and put it into the report variable after validating as a Report.
-    if report.type  == "rescue":
-        print("This is an rescue alert!")
+def receive_reports(report: Report):
+    # FastAPI receives the request body,
+    # validates it using the Report model,
+    # and gives us the validated data in `report`.
+
+    if report.type == ReportType.RESCUE:
+        print("This is a rescue alert!")
     else:
         print("XYZ")
 
-    print(report.type)
-    print(report.message)
-    print(report.location)
-    return report
+    return {"message": "Report received"}
