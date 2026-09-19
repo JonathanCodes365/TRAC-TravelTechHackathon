@@ -12,18 +12,10 @@ from models import ReportModel
 
 app = FastAPI()
 #this creates our fastapi application.
-
-@app.get("/") 
-#when someone sends a get request to /
-#use the function below.
-def home():
-    return{"message":"TRAC is running"}
-
 details = {
     "project":"TRAC",
     "purpose":"Tourism disaster coordination"
 }
-
 reports_response = {
     "message":"Report received"
 }
@@ -48,6 +40,11 @@ def update_report(report_id:int , to_update_report: Report, db:Session = Depends
     db.commit()
     return existing_report
 
+@app.get("/") 
+#when someone sends a get request to /
+#use the function below.
+def home():
+    return{"message":"TRAC is running"}
 
 @app.get("/about")
 def about():
@@ -58,7 +55,14 @@ def about():
 # and that report must follow the ReportResponse schema.
 
 def retrieve_reports(report_id: int, db: Session = Depends(get_db)):
+
     report_records = db.query(ReportModel).filter(ReportModel.id == report_id).first()
+
+    if report_records is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Report Not Found"
+        )
 
     # report_id comes from the URL: /reports/{report_id}
     # We query ReportModel, which is mapped to the "reports" table.
