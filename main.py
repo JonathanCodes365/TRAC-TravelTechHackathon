@@ -27,7 +27,18 @@ details = {
 reports_response = {
     "message":"Report received"
 }
-
+@app.put("/reports/{report_id}")
+def update_report(report_id:int , to_update_report: Report, db:Session = Depends(get_db)):
+    existing_report = db.query(ReportModel).filter(ReportModel.id ==report_id).first()
+    #now , here after making sure existing_report is actually in the database.
+    #we need to replace the data of the attributes of this report .
+    existing_report.type = to_update_report.type
+    existing_report.message=to_update_report.message
+    existing_report.location=to_update_report.location
+    #doing only this much doesnt actuallyy permanently cause save changes to the postgre table.
+    #cause we have shown the system here that : we have made changes to the object of ours.
+    #but we havent yet committed it yet.
+    db.commit()
 
 @app.get("/about")
 def about():
