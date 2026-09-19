@@ -129,11 +129,14 @@ def receive_reports(report:Report,
 
 @app.delete("/reports/{report_id}")
 def delete_reports(report_id:int , db:Session=Depends(get_db)):
-    pass
     existing_report = db.query(ReportModel).filter(ReportModel.id == report_id).first()
 
     if existing_report is None:
         raise HTTPException(
-            status_code = 404
+            status_code = 404,
             detail= "Report not found"
         )
+
+    db.delete(existing_report)
+    db.commit()
+    return {"Message": "Report Deleted Succesfully!!"}
