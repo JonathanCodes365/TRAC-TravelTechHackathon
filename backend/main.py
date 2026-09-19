@@ -10,9 +10,12 @@ from sqlalchemy.orm import Session
 
 from backend.models import ReportModel
 
+#we added CORSMiddleware here
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+#added for CORS here
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
