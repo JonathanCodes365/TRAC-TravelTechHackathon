@@ -1,3 +1,6 @@
+import httpx
+from pydantic import BaseModel
+
 from fastapi import FastAPI, Depends , HTTPException
 #import fastapi so that python can create a web api.
 from backend.schemas import Report,Reporttype,ReportResponse,ReportStatus,ReportUpdate
@@ -14,6 +17,46 @@ from backend.models import ReportModel
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+
+class AnalyzeRequest(BaseModel):
+    report_text: str
+
+AI_STATUS_TO_REPORT_TYPE = {
+
+    "rescued": Reporttype.RESCUE,
+
+    "injured": Reporttype.INJURED,
+
+    "missing": Reporttype.MISSING,
+
+    "safe": Reporttype.SAFE,
+
+}
+#we are doing this because the ones coming out from AI are using rescued while we are using RESCUE... its the wording difference.
+#so we are creating a dictionary that translates between them.
+
+
+@app.post("/reports/analyze")
+async def analyze_report(request: AnalyzeRequest):
+    async with httpx.AsyncClient() as client:
+        #this is us saying let us have a tool that let my backend make an HTTP request to another-server.
+
+        response = await client.post(
+            #8001- server for AI
+            #8000- server for backend
+            "http://127.0.0.1:8001/extract",
+            json={"report_text": request.report_text},
+        )
+
+    response.raise_for_status()
+
+    ai_result = response.json()
+
+    return {
+        "message": request.report_text,
+        "ai_analysis": ai_result,
+    }
 
 #added for CORS here
 app.add_middleware(
