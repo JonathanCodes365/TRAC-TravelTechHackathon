@@ -1,14 +1,14 @@
 from fastapi import FastAPI, Depends , HTTPException
 #import fastapi so that python can create a web api.
-from schemas import Report,Reporttype,ReportResponse
+from backend.schemas import Report,Reporttype,ReportResponse
 
 #Now ,we want to sure that our API endpoints get access to the Session-->database.
 #get_db is the function which contais db which is an object of sessionLocal() and it calls it
-from database import get_db
+from backend.database import get_db
 #Session is us doing groundwork and saying we are going to ensure sessions to our endpoints here.
 from sqlalchemy.orm import Session
 
-from models import ReportModel
+from backend.models import ReportModel
 
 app = FastAPI()
 #this creates our fastapi application.
@@ -37,6 +37,10 @@ def update_report(report_id:int , to_update_report: Report, db:Session = Depends
     #doing only this much doesnt actuallyy permanently cause save changes to the postgre table.
     #cause we have shown the system here that : we have made changes to the object of ours.
     #but we havent yet committed it yet.
+
+    #doing the same for latitude and longitude
+    existing_report.latitude = to_update_report.latitude
+    existing_report.longitude = to_update_report.longitude
     db.commit()
     return existing_report
 
@@ -103,7 +107,7 @@ def retrieve_all_reports(type:Reporttype | None = None,
 
 
 
-@app.post("/reports")
+@app.post("/reports", response_model = ReportResponse)
 def receive_reports(report:Report,
                     db: Session = Depends(get_db)):
     
@@ -137,7 +141,9 @@ def receive_reports(report:Report,
         #this report are the values we get after pydantic model does it work
         type = report.type,
         message = report.message,
-        location = report.location
+        location = report.location,
+        latitude = report.latitude,
+        longitude = report.longitude
         #so we are telling the system this is our database model for receive_report and this is how it must seem.
     )
 
@@ -149,7 +155,7 @@ def receive_reports(report:Report,
     #but still notice that we are only tracking and there 
     # is no thing yet that we have pushed .. we use commit for this.
     db.commit()
-    return report
+    return new_report
 
 
 @app.delete("/reports/{report_id}")

@@ -4,7 +4,7 @@ from sqlalchemy import String,Enum
 #postgresql has many types of column such as VARCHAR, TEXT, Integer, boolean etc.
 #we need to make sure that the column uses String
 
-from schemas import Reporttype
+from backend.schemas import Reporttype
 #we want to make sure our type is pydantic.
 
 
@@ -30,3 +30,7 @@ class ReportModel(Base):
     message:Mapped[str] =mapped_column(String)
 
     location:Mapped[str | None] = mapped_column(String,nullable = True)
+
+    #adding latitude and longitude
+    latitude: Mapped[float | None] = mapped_column(nullable=True)
+    longitude: Mapped[float | None] = mapped_column(nullable=True)

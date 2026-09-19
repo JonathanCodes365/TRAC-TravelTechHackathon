@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 #after creating the models; we want to make sure to tell PostgreSQL to create corresponding tables
-from models import Base
+from backend.models import Base
 
 from sqlalchemy.orm import sessionmaker
 
