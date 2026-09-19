@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends
 #import fastapi so that python can create a web api.
-from schemas import Report,Reporttype
+from schemas import Report,Reporttype,ReportResponse
 
 #Now ,we want to sure that our API endpoints get access to the Session-->database.
 #get_db is the function which contais db which is an object of sessionLocal() and it calls it
@@ -32,6 +32,16 @@ reports_response = {
 @app.get("/about")
 def about():
     return details
+
+@app.get("/reports",response_model=list[ReportResponse])
+#here we are saying this end point returns a list of reports; and each report must follow ReportResponse Schema.
+def retrieve_reports(db: Session = Depends(get_db)):
+    report_records =db.query(ReportModel).all()
+    #after following the schema you will get your data from here.
+    return report_records
+    
+    #This means ; use this query session to query the table represented by ReportModel
+
 
 
 @app.post("/reports")
