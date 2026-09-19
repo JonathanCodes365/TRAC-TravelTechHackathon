@@ -66,19 +66,89 @@ Report:
 
 def _mock_extract(report_text: str) -> dict:
     text = report_text.lower()
+
+    # Detect the incident status from known keywords.
     status = None
     for s in ["missing", "injured", "rescued", "safe"]:
         if s in text:
             status = s
             break
-    count_match = re.search(r"\b(\d+)\b", report_text)
-    people_count = int(count_match.group(1)) if count_match else 1
-    return {
-        "name": None, "location": None, "status": status,
-        "time": "2026-09-19T16:00:00", "people_count": people_count,
-        "action": None, "_mock": True,
+
+    # Detect a number only when it is explicitly associated with people.
+    number_words = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
     }
 
+    count_match = re.search(
+        r"\b(\d+)\s+(?:tourists?|people|persons?|travelers?|hikers?|trekkers?)\b",
+        text
+    )
+
+    if count_match:
+        people_count = int(count_match.group(1))
+    else:
+        people_count = None
+
+        for word, number in number_words.items():
+            if re.search(
+                rf"\b{word}\s+(?:tourists?|people|persons?|travelers?|hikers?|trekkers?)\b",
+                text
+            ):
+                people_count = number
+                break
+
+    # Detect a location after words such as "near", "at", "in", or "around".
+    location_match = re.search(
+        r"\b(?:near|at|in|around)\s+([A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*)*)",
+        report_text
+    )
+
+    location = location_match.group(1) if location_match else None
+
+    # Detect simple AM/PM times.
+    time_match = re.search(
+        r"\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\b",
+        report_text,
+        re.IGNORECASE
+    )
+
+    if time_match:
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2) or 0)
+        period = time_match.group(3).upper()
+
+        if period == "PM" and hour != 12:
+            hour += 12
+        elif period == "AM" and hour == 12:
+            hour = 0
+
+        extracted_time = datetime.now().replace(
+            hour=hour,
+            minute=minute,
+            second=0,
+            microsecond=0
+        ).isoformat()
+    else:
+        extracted_time = None
+
+    return {
+        "name": None,
+        "location": location,
+        "status": status,
+        "time": extracted_time,
+        "people_count": people_count,
+        "action": None,
+        "_mock": True,
+    }
 
 def _call_openai_style(cfg: dict, api_key: str, model: str, prompt: str) -> str:
     resp = requests.post(
