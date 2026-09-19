@@ -10,7 +10,16 @@ from sqlalchemy.orm import Session
 
 from backend.models import ReportModel
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 #this creates our fastapi application.
 details = {
     "project":"TRAC",
@@ -19,7 +28,7 @@ details = {
 reports_response = {
     "message":"Report received"
 }
-@app.put("/reports/{report_id}")
+@app.put("/reports/{report_id}",response_model=ReportResponse)
 def update_report(report_id:int , to_update_report: Report, db:Session = Depends(get_db)):
     existing_report = db.query(ReportModel).filter(ReportModel.id ==report_id).first()
 
