@@ -1,15 +1,42 @@
+Obvious things to take note of :
 So inorder to do the Read part of CRUD operations...
-
 We need to 1st decide a end point that will decide which what will actually trigger this response.
-
 we will make it .. @app.get("/reports")
-
-so we would do ...report_records =  db.query(ReportModel).all()
-
-# which obviously means 
-
+so we would do ...report_records =  db.query(ReportModel).all(); which obviously means:
 1. db = represents session.
 2. So, using this session retrieve all the records represented by ReportmModel.
-
 But we must take note that report_records contains SQLAlchemy objects..
 #But since this is FASTApi ; it can return this data into JSON for users.
+
+After doing : report_records =  db.query(ReportModel).all();
+How this operation occurs and what we need:
+
+1. PostgreSQL--> ReportModel(This is our base model like how we did with incoming data)--> Pydantic Response Schema
+--> JSON --> Client
+
+2. Oh! but you might ask why cant we just return the report that the user sends it like it is ? 
+example : report = report ? 
+Problem: the incoming request doesnt have a id ? we wouldnot be able to seperate them like this ? 
+
+But our database creates the id and using this id we will able to seperate these reports as we like it. 
+
+So our ReportModel which is our BaseModel represents as a Model for data representation of how the incoming and outgoing
+data should actually look like.
+So, our Response Schema must be able to work with a SQLAlchemy ORM object / ReportModel in this case.
+
+and for the pydantic nature for the type of data representation 
+we use :
+
+model_config = {
+    "from_attributes": True
+}
+It means: Pydantic is allowed to get data from an object's attribute?
+Ok why do we need that and what is this cryptic meaning ?
+
+Ans: So, in our database we currently have our SQLAlchemy object .i.e. ReportModel which contains
+attributes like : report.id , report,type, report.message, report.location right ?
+
+So our pydantic expects data more like in the form of a dictionary...
+meaning there must be a key and a value.
+
+So, essentially we are saying Pydantic is allowed to get data from attributes of ReportModel.
