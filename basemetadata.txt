@@ -1,0 +1,15 @@
+So here is how basemetadata works
+
+# from sqlalchemy import create_engine
+# from models import Base
+DATABASE_URL = "postgresql+psycopg://ngawangtharchinsherpa@localhost:5432/trac"
+engine = create_engine(DATABASE_URL)
+Base.metadata.create_all(bind=engine)
+
+At first , Base is imported from Models:
+
+database.py --> import base --> models.py -- > knows about Report(and recognizes as it is in Base)
+
+Now, Report(alchemy model) --> reports(sql table) --> id , message ,location, type.
+
+So, when base.metada is reached --> createall is performed. --> postgresql-->creates reports
