@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends , HTTPException
 #import fastapi so that python can create a web api.
 from schemas import Report,Reporttype,ReportResponse
 
@@ -13,7 +13,7 @@ from models import ReportModel
 app = FastAPI()
 #this creates our fastapi application.
 
-@app.get("/")
+@app.get("/") 
 #when someone sends a get request to /
 #use the function below.
 def home():
@@ -30,6 +30,13 @@ reports_response = {
 @app.put("/reports/{report_id}")
 def update_report(report_id:int , to_update_report: Report, db:Session = Depends(get_db)):
     existing_report = db.query(ReportModel).filter(ReportModel.id ==report_id).first()
+
+
+    if existing_report is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Report not found"
+        )
     #now , here after making sure existing_report is actually in the database.
     #we need to replace the data of the attributes of this report .
     existing_report.type = to_update_report.type
@@ -39,6 +46,8 @@ def update_report(report_id:int , to_update_report: Report, db:Session = Depends
     #cause we have shown the system here that : we have made changes to the object of ours.
     #but we havent yet committed it yet.
     db.commit()
+    return existing_report
+
 
 @app.get("/about")
 def about():
@@ -116,3 +125,15 @@ def receive_reports(report:Report,
     # is no thing yet that we have pushed .. we use commit for this.
     db.commit()
     return report
+
+
+@app.delete("/reports/{report_id}")
+def delete_reports(report_id:int , db:Session=Depends(get_db)):
+    pass
+    existing_report = db.query(ReportModel).filter(ReportModel.id == report_id).first()
+
+    if existing_report is None:
+        raise HTTPException(
+            status_code = 404
+            detail= "Report not found"
+        )
