@@ -33,9 +33,10 @@ reports_response = {
 def about():
     return details
 
-@app.get("/reports",response_model=list[ReportResponse])
+@app.get("/reports/{report_id}",response_model=list[ReportResponse])
 #here we are saying this end point returns a list of reports; and each report must follow ReportResponse Schema.
-def retrieve_reports(db: Session = Depends(get_db)):
+def retrieve_reports(report_id:int ,db: Session = Depends(get_db)):
+    pass
     report_records =db.query(ReportModel).all()
     #after following the schema you will get your data from here.
     return report_records
