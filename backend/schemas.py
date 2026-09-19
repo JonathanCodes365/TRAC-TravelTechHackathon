@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 #for validation
-from typing import Optional
+from typing import Literal, Optional
 #for optional data.
 from enum import Enum
 #this is to make sure that the user can only select from a few range of type we specify.
@@ -64,6 +64,8 @@ class ReportUpdate(BaseModel):
     latitude: Optional[float] = Field(default=None, ge=-90, le=90)
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
     status: Optional[ReportStatus] = None
+    # A coordinator's answer to the AI's duplicate suggestion.
+    duplicate_state: Optional[Literal["confirmed", "dismissed"]] = None
 
     model_config = {"str_strip_whitespace": True}
 
@@ -75,7 +77,7 @@ class ReportUpdate(BaseModel):
     @model_validator(mode="after")
     def check_changes(self):
         sent = self.model_fields_set
-        for name in ("type", "message", "status"):
+        for name in ("type", "message", "status", "duplicate_state"):
             if name in sent and getattr(self, name) is None:
                 raise ValueError(f"{name} can't be empty")
         if ("latitude" in sent) != ("longitude" in sent) or (self.latitude is None) != (self.longitude is None):
@@ -95,6 +97,16 @@ class ReportResponse(BaseModel):
 
     status: ReportStatus = ReportStatus.OPEN
     created_at: Optional[datetime] = None
+
+    # What the AI found (see backend/ai.py). Empty until the AI has checked the report.
+    ai_state: Optional[Literal["pending", "done", "failed"]] = None
+    people_count: Optional[int] = None
+    person_name: Optional[str] = None
+    ai_suggested_type: Optional[Reporttype] = None
+    ai_source: Optional[str] = None
+    duplicate_of: Optional[int] = None
+    duplicate_score: Optional[float] = None
+    duplicate_state: Optional[Literal["suggested", "confirmed", "dismissed"]] = None
 
     model_config = {
         "from_attributes":True

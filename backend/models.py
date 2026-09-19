@@ -50,3 +50,18 @@ class ReportModel(Base):
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+    # Filled in by the AI service after a report is saved or edited (see backend/ai.py).
+    # ai_state is "pending" while the AI checks the report, then "done", or "failed"
+    # if the AI couldn't be reached. ai_source is "rules" (keyword rules) or "model" (a language model).
+    ai_state: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    people_count: Mapped[int | None] = mapped_column(nullable=True)
+    person_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    ai_suggested_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    ai_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    # An earlier report the AI thinks this one repeats, and how sure it is (0 to 1).
+    # duplicate_state is "suggested" by the AI, then "confirmed" or "dismissed" by a coordinator.
+    duplicate_of: Mapped[int | None] = mapped_column(nullable=True)
+    duplicate_score: Mapped[float | None] = mapped_column(nullable=True)
+    duplicate_state: Mapped[str | None] = mapped_column(String(20), nullable=True)

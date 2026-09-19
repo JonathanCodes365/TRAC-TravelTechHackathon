@@ -1,7 +1,6 @@
-import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from fastapi import FastAPI, Depends , HTTPException
+from fastapi import FastAPI, Depends , HTTPException, BackgroundTasks
 #import fastapi so that python can create a web api.
 from backend.schemas import Report,Reporttype,ReportResponse,ReportStatus,ReportUpdate
 
@@ -13,6 +12,10 @@ from sqlalchemy.orm import Session
 
 from backend.models import ReportModel
 
+# Talks to the AI service (ai-service/, port 8001) for the backend.
+from backend import ai
+from sqlalchemy import text
+
 #we added CORSMiddleware here
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -20,48 +23,42 @@ app = FastAPI()
 
 
 class AnalyzeRequest(BaseModel):
-    report_text: str
+    # min_length=1 so an empty message isn't sent to the AI.
+    report_text: str = Field(min_length=1, max_length=2000)
 
-AI_STATUS_TO_REPORT_TYPE = {
-
-    "rescued": Reporttype.RESCUE,
-
-    "injured": Reporttype.INJURED,
-
-    "missing": Reporttype.MISSING,
-
-    "safe": Reporttype.SAFE,
-
-}
-#we are doing this because the ones coming out from AI are using rescued while we are using RESCUE... its the wording difference.
-#so we are creating a dictionary that translates between them.
+# The AI's words (missing, injured, rescued, safe) are translated to our report types in
+# backend/ai.py (ai.AI_STATUS_TO_REPORT_TYPE). Careful: "rescued" means already safe.
 
 
 @app.post("/reports/analyze")
-async def analyze_report(request: AnalyzeRequest):
-    async with httpx.AsyncClient() as client:
-        #this is us saying let us have a tool that let my backend make an HTTP request to another-server.
-
-        response = await client.post(
-            #8001- server for AI
-            #8000- server for backend
-            "http://127.0.0.1:8001/extract",
-            json={"report_text": request.report_text},
+def analyze_report(request: AnalyzeRequest):
+    # Ask the AI what a message is about before it's sent, so the report form can
+    # suggest a type while someone types.
+    #8001- server for AI
+    #8000- server for backend
+    # The backend talks to the AI for the frontend, so the frontend only needs the backend's address.
+    try:
+        ai_result = ai.extract(request.report_text)
+    except ai.AIUnavailable:
+        raise HTTPException(
+            status_code=503,
+            detail="The AI service isn't available right now."
         )
 
-    response.raise_for_status()
-
-    ai_result = response.json()
-    ai_status = ai_result.get("status")
-    report_type = AI_STATUS_TO_REPORT_TYPE.get(ai_status)
+    report_type = ai.suggested_type(ai_result)
 
     return {
     "message": request.report_text,
     "suggested_report": {
-        "type": report_type.value if report_type else Reporttype.INCIDENT.value,
+        # None when the AI can't tell, rather than guessing "incident".
+        "type": report_type.value if report_type else None,
         "status": ReportStatus.OPEN.value,
         "location": ai_result.get("location"),
+        "people_count": ai.people_count(ai_result.get("people_count")),
+        "name": ai.person_name(ai_result.get("name")),
     },
+    # "rules" when the AI used its keyword rules, "model" when a language model answered.
+    "source": "rules" if ai_result.get("_mock") else "model",
     "ai_analysis": ai_result,
     }
 
@@ -82,7 +79,7 @@ reports_response = {
     "message":"Report received"
 }
 @app.put("/reports/{report_id}",response_model=ReportResponse)
-def update_report(report_id:int , to_update_report: Report, db:Session = Depends(get_db)):
+def update_report(report_id:int , to_update_report: Report, background_tasks: BackgroundTasks, db:Session = Depends(get_db)):
     existing_report = db.query(ReportModel).filter(ReportModel.id ==report_id).first()
 
 
@@ -103,11 +100,14 @@ def update_report(report_id:int , to_update_report: Report, db:Session = Depends
     #doing the same for latitude and longitude
     existing_report.latitude = to_update_report.latitude
     existing_report.longitude = to_update_report.longitude
+    # The text changed, so ask the AI to check the report again.
+    existing_report.ai_state = "pending"
     db.commit()
+    background_tasks.add_task(ai.enrich_report, existing_report.id)
     return existing_report
 
 @app.patch("/reports/{report_id}", response_model=ReportResponse)
-def patch_report(report_id: int, changes: ReportUpdate, db: Session = Depends(get_db)):
+def patch_report(report_id: int, changes: ReportUpdate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     # PUT replaces the whole report. PATCH only changes the fields that are sent,
     # e.g. {"status": "resolved"} when a coordinator closes a report.
     existing_report = db.query(ReportModel).filter(ReportModel.id == report_id).first()
@@ -119,11 +119,47 @@ def patch_report(report_id: int, changes: ReportUpdate, db: Session = Depends(ge
         )
 
     # exclude_unset=True gives only the fields that were actually in the request.
-    for field, value in changes.model_dump(exclude_unset=True).items():
+    fields = changes.model_dump(exclude_unset=True)
+
+    if "duplicate_state" in fields:
+        if existing_report.duplicate_of is None:
+            raise HTTPException(
+                status_code=400,
+                detail="This report has no possible duplicate to confirm or dismiss"
+            )
+        # A confirmed duplicate is covered by the earlier report, so it's closed too.
+        if fields["duplicate_state"] == "confirmed" and "status" not in fields:
+            fields["status"] = ReportStatus.RESOLVED
+
+    for field, value in fields.items():
         if isinstance(value, ReportStatus):
             value = value.value  # the status column stores plain text like "resolved"
         setattr(existing_report, field, value)
+
+    # If the words or the place changed, ask the AI to check the report again.
+    recheck = bool({"type", "message", "location"} & fields.keys())
+    if recheck:
+        existing_report.ai_state = "pending"
     db.commit()
+    if recheck:
+        background_tasks.add_task(ai.enrich_report, existing_report.id)
+    return existing_report
+
+@app.post("/reports/{report_id}/analyze", response_model=ReportResponse, status_code=202)
+def reanalyze_report(report_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    # Run the AI check again, e.g. after the AI service was down (ai_state "failed").
+    # 202 means "Accepted": the AI's answer shows up on the report a moment later.
+    existing_report = db.query(ReportModel).filter(ReportModel.id == report_id).first()
+
+    if existing_report is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Report not found"
+        )
+
+    existing_report.ai_state = "pending"
+    db.commit()
+    background_tasks.add_task(ai.enrich_report, existing_report.id)
     return existing_report
 
 @app.get("/") 
@@ -135,6 +171,23 @@ def home():
 @app.get("/about")
 def about():
     return details
+
+@app.get("/health")
+def health(db: Session = Depends(get_db)):
+    # Whether every part of TRAC is working: this API, the database and the AI service.
+    try:
+        db.execute(text("SELECT 1"))
+        database = "ok"
+    except Exception:
+        database = "error"
+    ai_health = ai.health()
+    return {
+        "api": "ok",
+        "database": database,
+        "ai": "ok" if ai_health else "unavailable",
+        # How the AI reads messages: "rules" (keywords) or a provider such as "openai".
+        "ai_extraction": ai_health.get("extraction") if ai_health else None,
+    }
 
 @app.get("/reports/{report_id}", response_model=ReportResponse)
 # here we are saying this endpoint returns one report,
@@ -199,6 +252,7 @@ def retrieve_all_reports(type:Reporttype | None = None,
 # status_code=201 means "Created", the standard answer when a new record is made.
 @app.post("/reports", response_model = ReportResponse, status_code=201)
 def receive_reports(report:Report,
+                    background_tasks: BackgroundTasks,
                     db: Session = Depends(get_db)):
     
     #This function is actually telling us: Take the incoming request from the body 
@@ -244,7 +298,10 @@ def receive_reports(report:Report,
     # because i want it to become a database record.
     #but still notice that we are only tracking and there 
     # is no thing yet that we have pushed .. we use commit for this.
+    # The AI checks the report after the response is sent, so the reporter never waits for it.
+    new_report.ai_state = "pending"
     db.commit()
+    background_tasks.add_task(ai.enrich_report, new_report.id)
     return new_report
 
 
@@ -258,6 +315,11 @@ def delete_reports(report_id:int , db:Session=Depends(get_db)):
             detail= "Report not found"
         )
 
+    # Reports that pointed at this one as a possible duplicate lose that link.
+    db.query(ReportModel).filter(ReportModel.duplicate_of == report_id).update(
+        {"duplicate_of": None, "duplicate_score": None, "duplicate_state": None},
+        synchronize_session=False,
+    )
     db.delete(existing_report)
     db.commit()
     return {"message": "Report deleted successfully"}
