@@ -10,6 +10,7 @@ import {
   STATUS_INFO,
   TYPE_INFO,
   hasCoords,
+  hasDuplicateSuggestion,
   isUrgent,
   type PinnedReport,
   type Report,
@@ -56,13 +57,25 @@ export default function ReportsMap({ reports, selectedId = null, onSelect, showL
                   weight: selected ? 3 : 2,
                   fillColor: color,
                   fillOpacity: report.status === "resolved" ? 0.35 : 0.95,
+                  // A dashed ring marks a report the AI thinks is a duplicate, until someone decides.
+                  dashArray: hasDuplicateSuggestion(report) ? "3 3" : undefined,
                 }}
               >
                 <Tooltip direction="top" offset={[0, -10]} opacity={1}>
                   <span className="font-semibold">{TYPE_INFO[report.type].label}</span>
-                  <span className="text-ink-muted"> · {STATUS_INFO[report.status].label} · #{report.id}</span>
+                  <span className="text-ink-muted">
+                    {" "}
+                    · {STATUS_INFO[report.status].label} · #{report.id}
+                    {report.people_count ? ` · ${report.people_count} people` : ""}
+                  </span>
                   <br />
                   {report.message.length > 70 ? `${report.message.slice(0, 70)}…` : report.message}
+                  {hasDuplicateSuggestion(report) && (
+                    <>
+                      <br />
+                      <span className="text-amber-600">Possible duplicate of #{report.duplicate_of}</span>
+                    </>
+                  )}
                 </Tooltip>
               </CircleMarker>
             </Fragment>

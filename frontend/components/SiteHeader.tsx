@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Radio, Send } from "lucide-react";
-import { useApiStatus } from "@/lib/hooks";
+import { useEffect, useRef, useState } from "react";
+import { CircleCheck, CircleX, LayoutDashboard, LoaderCircle, Radio, Send } from "lucide-react";
+import { useSystemHealth } from "@/lib/hooks";
 
 const LINKS = [
   { href: "/", label: "Report", icon: Send },
@@ -26,8 +27,8 @@ export default function SiteHeader() {
           </span>
         </Link>
 
-        <div className="flex items-center gap-3">
-          <ApiStatus />
+        <div className="flex items-center gap-2 sm:gap-3">
+          <SystemStatus />
           <nav className="flex gap-1 rounded-xl bg-surface-muted p-1 text-sm font-medium">
             {LINKS.map(({ href, label, icon: Icon }) => {
               const active = pathname === href;
@@ -52,23 +53,106 @@ export default function SiteHeader() {
   );
 }
 
-function ApiStatus() {
-  const status = useApiStatus();
-  const label = { checking: "Connecting…", online: "Live", offline: "Offline" }[status];
-  const color = { checking: "bg-ink-subtle", online: "bg-emerald-500", offline: "bg-red-500" }[status];
+// A status pill that opens a small panel showing the backend, the database and the AI service.
+function SystemStatus() {
+  const { state, health } = useSystemHealth();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  const databaseOk = health?.database === "ok";
+  const aiOk = health?.ai === "ok";
+  const overall =
+    state === "online" ? (databaseOk && aiOk ? "ok" : "degraded") : state === "offline" ? "offline" : "checking";
+  const label = {
+    ok: "All systems live",
+    degraded: databaseOk ? "AI offline" : "Database problem",
+    offline: "Offline",
+    checking: "Connecting…",
+  }[overall];
+  const dot = { ok: "bg-emerald-500", degraded: "bg-amber-500", offline: "bg-red-500", checking: "bg-ink-subtle" }[overall];
+  const aiMode = health?.ai_extraction === "rules" ? "keyword rules" : health?.ai_extraction;
 
   return (
-    <span
-      className="hidden items-center gap-2 rounded-full border border-line px-2.5 py-1 text-xs font-medium text-ink-muted md:inline-flex"
-      title={status === "offline" ? "Can't reach the TRAC backend" : "Connected to the TRAC backend"}
-    >
-      <span className="relative flex size-2">
-        {status === "online" && (
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-        )}
-        <span className={`relative inline-flex size-2 rounded-full ${color}`} />
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label={`System status: ${label}`}
+        className="inline-flex h-8 items-center gap-2 rounded-full border border-line px-2.5 text-xs font-medium text-ink-muted hover:text-ink"
+      >
+        <span className="relative flex size-2">
+          {overall === "ok" && (
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+          )}
+          <span className={`relative inline-flex size-2 rounded-full ${dot}`} />
+        </span>
+        <span className="hidden md:inline">{label}</span>
+      </button>
+
+      {open && (
+        <div className="absolute top-full right-0 z-50 mt-2 w-72 rounded-2xl border border-line bg-surface p-4 shadow-xl">
+          <p className="text-sm font-semibold">System status</p>
+          <ul className="mt-3 space-y-3 text-sm">
+            <StatusRow
+              name="Backend API"
+              state={state === "online" ? "ok" : state === "offline" ? "down" : "checking"}
+              detail={state === "offline" ? "Can’t reach it. Is it running?" : "Port 8000"}
+            />
+            <StatusRow
+              name="Database"
+              state={!health ? (state === "offline" ? "down" : "checking") : databaseOk ? "ok" : "down"}
+              detail={!health ? "Checked through the backend" : databaseOk ? "Connected" : "The backend can’t reach it"}
+            />
+            <StatusRow
+              name="AI service"
+              state={!health ? (state === "offline" ? "down" : "checking") : aiOk ? "ok" : "down"}
+              detail={
+                !health
+                  ? "Checked through the backend"
+                  : aiOk
+                    ? `Running · ${aiMode ?? "ready"}`
+                    : "Not running. Reports still save."
+              }
+            />
+          </ul>
+          <p className="mt-3 text-xs text-ink-subtle">Checked every 15 seconds.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusRow({ name, state, detail }: { name: string; state: "ok" | "down" | "checking"; detail: string }) {
+  return (
+    <li className="flex items-start gap-2.5">
+      {state === "ok" ? (
+        <CircleCheck className="mt-0.5 size-4 shrink-0 text-emerald-500" aria-hidden />
+      ) : state === "down" ? (
+        <CircleX className="mt-0.5 size-4 shrink-0 text-red-500" aria-hidden />
+      ) : (
+        <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin text-ink-subtle" aria-hidden />
+      )}
+      <span>
+        <span className="block font-medium">{name}</span>
+        <span className="block text-xs text-ink-muted">{detail}</span>
       </span>
-      {label}
-    </span>
+    </li>
   );
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { StatusBadge, TypeIcon } from "@/components/ReportBadges";
+import AiInsights from "@/components/report/AiInsights";
 import ReportActions from "@/components/report/ReportActions";
 import ReportFacts from "@/components/report/ReportFacts";
 import { TYPE_INFO, type Report } from "@/lib/reports";
@@ -52,6 +53,8 @@ export default function ReportPanel({ report, now, onClose }: Props) {
         </div>
 
         <ReportFacts report={report} now={now} />
+
+        <AiInsights report={report} />
 
         <div className="border-t border-line pt-5">
           <ReportActions key={report.id} report={report} />

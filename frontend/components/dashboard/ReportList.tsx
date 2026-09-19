@@ -1,9 +1,9 @@
 "use client";
 
-import { MapPin } from "lucide-react";
+import { GitMerge, LoaderCircle, MapPin, Users } from "lucide-react";
 import { StatusBadge, TypeBadge } from "@/components/ReportBadges";
 import { formatCoords, parseDate, timeAgo } from "@/lib/format";
-import { TYPE_INFO, hasCoords, type Report } from "@/lib/reports";
+import { TYPE_INFO, hasCoords, hasDuplicateSuggestion, type Report } from "@/lib/reports";
 
 type Props = {
   reports: Report[];
@@ -36,6 +36,43 @@ export default function ReportList({ reports, total, selectedId, onSelect, now }
         </ul>
       )}
     </div>
+  );
+}
+
+// Small labels for what the AI found: people count, a possible duplicate, or that it's still checking.
+function AiChips({ report }: { report: Report }) {
+  const chip = "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium";
+  const duplicate = hasDuplicateSuggestion(report);
+  const merged = report.duplicate_state === "confirmed" && report.duplicate_of !== null;
+  if (report.ai_state !== "pending" && !report.people_count && !duplicate && !merged) return null;
+
+  return (
+    <span className="mt-2 flex flex-wrap gap-1.5">
+      {report.ai_state === "pending" && (
+        <span className={`${chip} bg-violet-500/10 text-violet-700 dark:text-violet-300`}>
+          <LoaderCircle className="size-3 animate-spin" aria-hidden />
+          AI checking
+        </span>
+      )}
+      {report.people_count && (
+        <span className={`${chip} bg-surface-muted text-ink-muted`}>
+          <Users className="size-3" aria-hidden />
+          {report.people_count} {report.people_count === 1 ? "person" : "people"}
+        </span>
+      )}
+      {duplicate && (
+        <span className={`${chip} bg-amber-500/15 text-amber-700 dark:text-amber-300`}>
+          <GitMerge className="size-3" aria-hidden />
+          Duplicate of #{report.duplicate_of}? {Math.round((report.duplicate_score ?? 0) * 100)}%
+        </span>
+      )}
+      {merged && (
+        <span className={`${chip} bg-surface-muted text-ink-muted`}>
+          <GitMerge className="size-3" aria-hidden />
+          Merged into #{report.duplicate_of}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -77,6 +114,7 @@ function ReportCard({
         </span>
       </span>
       <span className="mt-2.5 line-clamp-2 block text-sm text-ink">{report.message}</span>
+      <AiChips report={report} />
       <span className="mt-2 flex items-center gap-1.5 text-xs text-ink-muted">
         <MapPin className="size-3.5 shrink-0" aria-hidden />
         <span className="truncate">{place}</span>

@@ -15,12 +15,50 @@ export type Report = {
   longitude: number | null;
   status: ReportStatus;
   created_at: string | null;
+  // Filled in by the AI service a moment after the report is saved (backend/ai.py).
+  ai_state: "pending" | "done" | "failed" | null;
+  people_count: number | null;
+  person_name: string | null;
+  ai_suggested_type: ReportType | null;
+  ai_source: "rules" | "model" | null;
+  duplicate_of: number | null;
+  duplicate_score: number | null;
+  duplicate_state: "suggested" | "confirmed" | "dismissed" | null;
 };
 
 export type NewReport = Pick<Report, "type" | "message" | "location" | "latitude" | "longitude">;
 
 // Body for PATCH /reports/{id}: only the fields that change.
-export type ReportChanges = Partial<NewReport & { status: ReportStatus }>;
+export type ReportChanges = Partial<
+  NewReport & { status: ReportStatus; duplicate_state: "confirmed" | "dismissed" }
+>;
+
+// Answer from POST /reports/analyze: what the AI reads in a message before it's sent.
+export type AiSuggestion = {
+  suggested_report: {
+    type: ReportType | null;
+    location: string | null;
+    people_count: number | null;
+    name: string | null;
+  };
+  source: "rules" | "model";
+};
+
+// Answer from GET /health.
+export type SystemHealth = {
+  api: "ok";
+  database: "ok" | "error";
+  ai: "ok" | "unavailable";
+  ai_extraction: string | null;
+};
+
+export function hasDuplicateSuggestion(report: Report) {
+  return report.duplicate_state === "suggested" && report.duplicate_of !== null;
+}
+
+export function duplicateLabel(score: number | null) {
+  return (score ?? 0) >= 0.8 ? "Likely duplicate" : "Possible duplicate";
+}
 
 export type Coords = { latitude: number; longitude: number };
 export type PinnedReport = Report & Coords;

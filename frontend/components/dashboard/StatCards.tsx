@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { Activity, CircleCheck, CircleDot, Hourglass, type LucideIcon } from "lucide-react";
+import { Activity, CircleCheck, CircleDot, Hourglass, Sparkles, type LucideIcon } from "lucide-react";
 import { parseDate } from "@/lib/format";
-import { REPORT_TYPES, STATUS_INFO, TYPE_INFO, isUrgent, type Report } from "@/lib/reports";
+import { REPORT_TYPES, STATUS_INFO, TYPE_INFO, hasDuplicateSuggestion, isUrgent, type Report } from "@/lib/reports";
 
 type Props = { reports: Report[]; now: number; loading: boolean };
 
@@ -14,9 +14,15 @@ export default function StatCards({ reports, now, loading }: Props) {
     const created = parseDate(r.created_at);
     return created !== null && now - created.getTime() < 3_600_000;
   }).length;
+  const duplicates = reports.filter(hasDuplicateSuggestion).length;
+  // People the AI counted in reports that still need attention. Possible duplicates are
+  // left out, so the same family reported twice isn't counted twice.
+  const people = reports
+    .filter((r) => r.status !== "resolved" && !hasDuplicateSuggestion(r))
+    .reduce((sum, r) => sum + (r.people_count ?? 0), 0);
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
       <StatCard
         label="Open"
         value={count("open")}
@@ -64,6 +70,16 @@ export default function StatCards({ reports, now, loading }: Props) {
           })}
         </div>
       </StatCard>
+      <div className="col-span-2 lg:col-span-1">
+        <StatCard
+          label="AI review"
+          value={duplicates}
+          icon={Sparkles}
+          color="#8b5cf6"
+          hint={`${duplicates === 1 ? "possible duplicate" : "possible duplicates"} · ${people} ${people === 1 ? "person" : "people"} in active reports`}
+          loading={loading}
+        />
+      </div>
     </div>
   );
 }

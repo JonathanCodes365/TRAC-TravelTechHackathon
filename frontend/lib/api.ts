@@ -1,4 +1,4 @@
-import type { NewReport, Report, ReportChanges } from "@/lib/reports";
+import type { AiSuggestion, NewReport, Report, ReportChanges, SystemHealth } from "@/lib/reports";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -15,16 +15,18 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`/api${path}`, { cache: "no-store", ...init });
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
     throw new ApiError("Can't reach the server. Check your connection and try again.", 0);
   }
   if (!res.ok) throw new ApiError(await errorMessage(res), res.status);
   return res.json();
 }
 
-function send<T>(path: string, method: "POST" | "PATCH" | "DELETE", body?: unknown) {
+function send<T>(path: string, method: "POST" | "PATCH" | "DELETE", body?: unknown, signal?: AbortSignal) {
   return request<T>(path, {
     method,
+    signal,
     ...(body === undefined
       ? {}
       : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
@@ -60,10 +62,15 @@ export function errorText(err: unknown) {
 }
 
 export const api = {
-  health: () => request<{ message: string }>(""),
+  health: () => request<SystemHealth>("/health"),
   listReports: () => request<Report[]>("/reports"),
   getReport: (id: number) => request<Report>(`/reports/${id}`),
   createReport: (report: NewReport) => send<Report>("/reports", "POST", report),
   updateReport: (id: number, changes: ReportChanges) => send<Report>(`/reports/${id}`, "PATCH", changes),
   deleteReport: (id: number) => send<{ message: string }>(`/reports/${id}`, "DELETE"),
+  // Ask the AI what a message is about, before it's sent.
+  analyzeText: (text: string, signal?: AbortSignal) =>
+    send<AiSuggestion>("/reports/analyze", "POST", { report_text: text }, signal),
+  // Run the AI check on a saved report again.
+  reanalyze: (id: number) => send<Report>(`/reports/${id}/analyze`, "POST"),
 };

@@ -1,7 +1,7 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
-import { ArrowUpDown, Search, X } from "lucide-react";
+import { ArrowUpDown, GitMerge, Search, X } from "lucide-react";
 import { TypeIcon } from "@/components/ReportBadges";
 import {
   REPORT_STATUSES,
@@ -9,6 +9,7 @@ import {
   SORT_LABELS,
   STATUS_INFO,
   TYPE_INFO,
+  hasDuplicateSuggestion,
   type Report,
   type ReportStatus,
   type ReportType,
@@ -20,16 +21,20 @@ export type Filters = {
   types: ReportType[];
   search: string;
   sort: SortKey;
+  // Only reports the AI thinks repeat an earlier one, waiting for a coordinator's answer.
+  duplicatesOnly: boolean;
 };
 
-export const NO_FILTERS: Filters = { status: "all", types: [], search: "", sort: "newest" };
+export const NO_FILTERS: Filters = { status: "all", types: [], search: "", sort: "newest", duplicatesOnly: false };
 
 type Props = { reports: Report[]; filters: Filters; onChange: Dispatch<SetStateAction<Filters>> };
 
 export default function Toolbar({ reports, filters, onChange }: Props) {
   // Build on the latest filters (not the ones from this render), so quick clicks don't undo each other.
   const update = (changes: Partial<Filters>) => onChange((current) => ({ ...current, ...changes }));
-  const filtering = filters.status !== "all" || filters.types.length > 0 || filters.search.trim() !== "";
+  const filtering =
+    filters.status !== "all" || filters.types.length > 0 || filters.search.trim() !== "" || filters.duplicatesOnly;
+  const duplicates = reports.filter(hasDuplicateSuggestion).length;
 
   function toggleType(type: ReportType) {
     onChange((current) => ({
@@ -117,6 +122,22 @@ export default function Toolbar({ reports, filters, onChange }: Props) {
             </button>
           );
         })}
+        {(duplicates > 0 || filters.duplicatesOnly) && (
+          <button
+            type="button"
+            aria-pressed={filters.duplicatesOnly}
+            onClick={() => onChange((current) => ({ ...current, duplicatesOnly: !current.duplicatesOnly }))}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors ${
+              filters.duplicatesOnly
+                ? "border-amber-500 bg-amber-500/15 text-ink"
+                : "border-amber-500/40 text-amber-700 hover:border-amber-500 dark:text-amber-300"
+            }`}
+          >
+            <GitMerge className="size-3.5" aria-hidden />
+            Possible duplicates
+            <span className="text-xs tabular-nums opacity-75">{duplicates}</span>
+          </button>
+        )}
         {filtering && (
           <button
             type="button"

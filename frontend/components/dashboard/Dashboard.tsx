@@ -10,7 +10,7 @@ import StatCards from "@/components/dashboard/StatCards";
 import Toolbar, { NO_FILTERS, type Filters } from "@/components/dashboard/Toolbar";
 import { errorText } from "@/lib/api";
 import { REFRESH_MS, useNow, useReports } from "@/lib/hooks";
-import { sortReports, type Report } from "@/lib/reports";
+import { hasDuplicateSuggestion, sortReports, type Report } from "@/lib/reports";
 
 // Leaflet needs `window`, so the map only renders in the browser.
 const ReportsMap = dynamic(() => import("@/components/map/ReportsMap"), {
@@ -114,12 +114,13 @@ export default function Dashboard() {
   );
 }
 
-function applyFilters(reports: Report[], { status, types, search, sort }: Filters) {
+function applyFilters(reports: Report[], { status, types, search, sort, duplicatesOnly }: Filters) {
   const query = search.trim().toLowerCase().replace(/^#/, "");
   const matches = reports.filter(
     (r) =>
       (status === "all" || r.status === status) &&
       (types.length === 0 || types.includes(r.type)) &&
+      (!duplicatesOnly || hasDuplicateSuggestion(r)) &&
       (!query ||
         String(r.id) === query ||
         r.message.toLowerCase().includes(query) ||

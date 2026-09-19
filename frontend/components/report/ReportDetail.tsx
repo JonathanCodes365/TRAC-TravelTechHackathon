@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Fragment } from "react";
 import { ArrowLeft, CircleCheck, Hourglass, Inbox, SearchX } from "lucide-react";
 import { StatusBadge, TypeIcon } from "@/components/ReportBadges";
+import AiInsights from "@/components/report/AiInsights";
 import ReportActions from "@/components/report/ReportActions";
 import ReportFacts from "@/components/report/ReportFacts";
 import { ApiError, errorText } from "@/lib/api";
@@ -75,13 +76,16 @@ export default function ReportDetail({ id }: { id: number }) {
         </section>
       </div>
 
-      <section className="rounded-3xl border border-line bg-surface p-5 shadow-sm sm:p-6">
-        <h2 className="font-semibold">Coordinator tools</h2>
-        <p className="mt-1 mb-4 text-sm text-ink-muted">
-          Update the status as the response moves along. Anyone following this page sees the change.
-        </p>
-        <ReportActions report={report} onDeleted={() => router.push("/dashboard")} />
-      </section>
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <AiInsights report={report} />
+        <section className="rounded-3xl border border-line bg-surface p-5 shadow-sm sm:p-6">
+          <h2 className="font-semibold">Coordinator tools</h2>
+          <p className="mt-1 mb-4 text-sm text-ink-muted">
+            Update the status as the response moves along. Anyone following this page sees the change.
+          </p>
+          <ReportActions report={report} onDeleted={() => router.push("/dashboard")} />
+        </section>
+      </div>
     </div>
   );
 }

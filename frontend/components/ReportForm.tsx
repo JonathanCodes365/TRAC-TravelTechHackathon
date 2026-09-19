@@ -3,11 +3,20 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState, type FormEvent, type ReactNode } from "react";
-import { Check, CircleCheck, LoaderCircle, LocateFixed, MapPin, Send, X } from "lucide-react";
+import { Check, CircleCheck, LoaderCircle, LocateFixed, MapPin, Send, Sparkles, Users, X } from "lucide-react";
 import { StatusBadge, TypeBadge, TypeIcon } from "@/components/ReportBadges";
 import { api, errorText } from "@/lib/api";
 import { formatCoords } from "@/lib/format";
-import { REPORT_TYPES, TYPE_INFO, type Coords, type Report, type ReportType } from "@/lib/reports";
+import { useAiSuggestion, useReport } from "@/lib/hooks";
+import {
+  REPORT_TYPES,
+  TYPE_INFO,
+  hasDuplicateSuggestion,
+  type AiSuggestion,
+  type Coords,
+  type Report,
+  type ReportType,
+} from "@/lib/reports";
 
 const MAX_MESSAGE = 1000;
 
@@ -91,6 +100,11 @@ export default function ReportForm() {
     }
   }
 
+  function applySuggestion(suggestion: AiSuggestion["suggested_report"]) {
+    if (suggestion.type) setType(suggestion.type);
+    if (suggestion.location && !location.trim()) setLocation(suggestion.location);
+  }
+
   function startOver() {
     setType(null);
     setMessage("");
@@ -116,6 +130,7 @@ export default function ReportForm() {
           Coordinators can see it on their live map now. Keep the tracking page open to see when a team is
           responding.
         </p>
+        <SentAiCheck id={sent.id} />
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <Link
             href={`/reports/${sent.id}`}
@@ -203,6 +218,9 @@ export default function ReportForm() {
         <p className="mt-1.5 text-right text-xs text-ink-subtle tabular-nums">
           {message.length}/{MAX_MESSAGE}
         </p>
+        <div className="mt-1">
+          <AiAssist message={message} chosenType={type} placeFilled={location.trim() !== ""} onApply={applySuggestion} />
+        </div>
       </Step>
 
       <Step number={3} title="Where are you?" optional>
@@ -284,6 +302,125 @@ export default function ReportForm() {
         {sending ? "Sending…" : "Send report"}
       </button>
     </form>
+  );
+}
+
+// While someone types, the AI suggests a report type and picks out people and places.
+function AiAssist({
+  message,
+  chosenType,
+  placeFilled,
+  onApply,
+}: {
+  message: string;
+  chosenType: ReportType | null;
+  placeFilled: boolean;
+  onApply: (suggestion: AiSuggestion["suggested_report"]) => void;
+}) {
+  const { data, error, isValidating, active, typing } = useAiSuggestion(message);
+
+  if (!active) {
+    return (
+      <p className="flex items-center gap-1.5 text-xs text-ink-subtle">
+        <Sparkles className="size-3.5" aria-hidden />
+        As you type, AI suggests the report type and counts the people mentioned.
+      </p>
+    );
+  }
+  if (error) {
+    return <p className="text-xs text-ink-subtle">AI suggestions are offline right now. You can still send the report.</p>;
+  }
+  if (!data) {
+    return (
+      <p className="flex items-center gap-1.5 text-xs text-ink-muted">
+        <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+        Reading your message…
+      </p>
+    );
+  }
+
+  const suggestion = data.suggested_report;
+  const found = suggestion.type || suggestion.people_count || suggestion.location;
+  const canApply =
+    (suggestion.type !== null && suggestion.type !== chosenType) || (suggestion.location !== null && !placeFilled);
+
+  return (
+    <div aria-live="polite" className="rounded-2xl border border-violet-500/25 bg-violet-500/5 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-violet-700 dark:text-violet-300">
+          <Sparkles className="size-3.5" aria-hidden />
+          AI suggestion
+          {(typing || isValidating) && <LoaderCircle className="size-3 animate-spin" aria-hidden />}
+        </span>
+        <span className="text-[11px] text-ink-subtle">{data.source === "model" ? "Language model" : "Keyword rules"}</span>
+      </div>
+      {found ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+          {suggestion.type && <TypeBadge type={suggestion.type} />}
+          {suggestion.people_count && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-medium">
+              <Users className="size-3.5" aria-hidden />
+              {suggestion.people_count} {suggestion.people_count === 1 ? "person" : "people"}
+            </span>
+          )}
+          {suggestion.location && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-medium">
+              <MapPin className="size-3.5" aria-hidden />
+              {suggestion.location}
+            </span>
+          )}
+          {canApply ? (
+            <button
+              type="button"
+              onClick={() => onApply(suggestion)}
+              className="ml-auto rounded-lg bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-700"
+            >
+              Use suggestion
+            </button>
+          ) : (
+            suggestion.type && (
+              <span className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <Check className="size-3.5" aria-hidden />
+                Matches
+              </span>
+            )
+          )}
+        </div>
+      ) : (
+        <p className="mt-1.5 text-sm text-ink-muted">Nothing clear yet. Say what happened, where, and how many people.</p>
+      )}
+    </div>
+  );
+}
+
+// After sending: what the AI check found, so the reporter knows it's being handled.
+function SentAiCheck({ id }: { id: number }) {
+  const { data: report } = useReport(id);
+  if (!report || report.ai_state === "failed" || report.ai_state === null) return null;
+
+  if (report.ai_state === "pending") {
+    return (
+      <p className="mt-4 flex items-center gap-2 text-sm text-ink-muted">
+        <LoaderCircle className="size-4 animate-spin" aria-hidden />
+        AI is checking your report…
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-violet-500/25 bg-violet-500/5 p-3 text-sm">
+      <p className="flex items-center gap-1.5 font-semibold">
+        <Sparkles className="size-4 text-violet-500" aria-hidden />
+        AI check done
+      </p>
+      <p className="mt-1 text-ink-muted">
+        {report.people_count
+          ? `${report.people_count} ${report.people_count === 1 ? "person" : "people"} noted for the team.`
+          : "Your report is ready for the team."}
+        {hasDuplicateSuggestion(report) &&
+          ` It looks like report #${report.duplicate_of}, which coordinators already have, so they can handle both together.`}
+      </p>
+    </div>
   );
 }
 
