@@ -52,10 +52,17 @@ async def analyze_report(request: AnalyzeRequest):
     response.raise_for_status()
 
     ai_result = response.json()
+    ai_status = ai_result.get("status")
+    report_type = AI_STATUS_TO_REPORT_TYPE.get(ai_status)
 
     return {
-        "message": request.report_text,
-        "ai_analysis": ai_result,
+    "message": request.report_text,
+    "suggested_report": {
+        "type": report_type.value if report_type else Reporttype.INCIDENT.value,
+        "status": ReportStatus.OPEN.value,
+        "location": ai_result.get("location"),
+    },
+    "ai_analysis": ai_result,
     }
 
 #added for CORS here
