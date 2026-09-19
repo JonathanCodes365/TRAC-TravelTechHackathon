@@ -1,0 +1,9 @@
+{
+  "name": "trac",
+  "private": true,
+  "description": "TRAC: disaster coordination for travelers (frontend, backend, AI service)",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "node scripts/dev.mjs"
+  }
+}
