@@ -52,7 +52,7 @@ def about():
 
 @app.get("/reports/{report_id}", response_model=ReportResponse)
 # here we are saying this endpoint returns one report,
-# and that report must follow the ReportResponse schema.
+# and that response/response_model must follow the ReportResponse schema.
 
 def retrieve_reports(report_id: int, db: Session = Depends(get_db)):
 
@@ -79,6 +79,21 @@ def retrieve_reports(report_id: int, db: Session = Depends(get_db)):
     return report_records
     
     #This means ; use this query session to query the table represented by ReportModel
+
+@app.get("/reports", response_model=list[ReportResponse])
+def retrieve_all_reports(type:Reporttype | None = None, 
+                         location :str |None= None,
+                         db:Session = Depends(get_db)):
+    query = db.query(ReportModel)
+
+    if type is not None:
+        query = query.filter(ReportModel.type ==type)
+    if location is not None:
+        query = query.filter(ReportModel.location ==location)
+        
+    report_records = query.all()
+    return report_records
+
 
 
 
