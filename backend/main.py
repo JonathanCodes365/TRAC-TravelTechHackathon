@@ -1,16 +1,28 @@
 from fastapi import FastAPI, Depends , HTTPException
 #import fastapi so that python can create a web api.
-from schemas import Report,Reporttype,ReportResponse
+from backend.schemas import Report,Reporttype,ReportResponse,ReportStatus,ReportUpdate
 
 #Now ,we want to sure that our API endpoints get access to the Session-->database.
 #get_db is the function which contais db which is an object of sessionLocal() and it calls it
-from database import get_db
+from backend.database import get_db
 #Session is us doing groundwork and saying we are going to ensure sessions to our endpoints here.
 from sqlalchemy.orm import Session
 
-from models import ReportModel
+from backend.models import ReportModel
+
+#we added CORSMiddleware here
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+#added for CORS here
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 #this creates our fastapi application.
 details = {
     "project":"TRAC",
@@ -19,7 +31,7 @@ details = {
 reports_response = {
     "message":"Report received"
 }
-@app.put("/reports/{report_id}")
+@app.put("/reports/{report_id}",response_model=ReportResponse)
 def update_report(report_id:int , to_update_report: Report, db:Session = Depends(get_db)):
     existing_report = db.query(ReportModel).filter(ReportModel.id ==report_id).first()
 
@@ -37,6 +49,30 @@ def update_report(report_id:int , to_update_report: Report, db:Session = Depends
     #doing only this much doesnt actuallyy permanently cause save changes to the postgre table.
     #cause we have shown the system here that : we have made changes to the object of ours.
     #but we havent yet committed it yet.
+
+    #doing the same for latitude and longitude
+    existing_report.latitude = to_update_report.latitude
+    existing_report.longitude = to_update_report.longitude
+    db.commit()
+    return existing_report
+
+@app.patch("/reports/{report_id}", response_model=ReportResponse)
+def patch_report(report_id: int, changes: ReportUpdate, db: Session = Depends(get_db)):
+    # PUT replaces the whole report. PATCH only changes the fields that are sent,
+    # e.g. {"status": "resolved"} when a coordinator closes a report.
+    existing_report = db.query(ReportModel).filter(ReportModel.id == report_id).first()
+
+    if existing_report is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Report not found"
+        )
+
+    # exclude_unset=True gives only the fields that were actually in the request.
+    for field, value in changes.model_dump(exclude_unset=True).items():
+        if isinstance(value, ReportStatus):
+            value = value.value  # the status column stores plain text like "resolved"
+        setattr(existing_report, field, value)
     db.commit()
     return existing_report
 
@@ -61,7 +97,7 @@ def retrieve_reports(report_id: int, db: Session = Depends(get_db)):
     if report_records is None:
         raise HTTPException(
             status_code=404,
-            detail="Report Not Found"
+            detail="Report not found"
         )
 
     # report_id comes from the URL: /reports/{report_id}
@@ -83,13 +119,14 @@ def retrieve_reports(report_id: int, db: Session = Depends(get_db)):
 @app.get("/reports", response_model=list[ReportResponse])
 def retrieve_all_reports(type:Reporttype | None = None, 
                          location :str |None= None,
+                         status: ReportStatus | None = None,
                          db:Session = Depends(get_db)):
     query = db.query(ReportModel)
 
     if type is not None:
         query = query.filter(ReportModel.type ==type)
     if location is not None:
-        query = query.filter(ReportModel.location.ilike(location))
+        query = query.filter(ReportModel.location.icontains(location, autoescape=True))
 
         # here we replaced == with ilike ... what ilike does it looks for 
         # similarity patterns between ReportModel.Location and location.
@@ -97,13 +134,20 @@ def retrieve_all_reports(type:Reporttype | None = None,
         #for example: the user enters pokhara and our database Contains Pokhara..
         #nowe due to the ilike it looks for pattern.. and since pokhara is quite similar to Pokhara... it will show the same .. 
 
-    report_records = query.all()
+        # icontains is ilike with % around the text, so part of a name also matches:
+        # "pokh" finds "Lakeside, Pokhara". Plain ilike("pokhara") only matched the exact text.
+    if status is not None:
+        query = query.filter(ReportModel.status == status.value)
+
+    # Newest reports first (without order_by, the database can return rows in any order).
+    report_records = query.order_by(ReportModel.id.desc()).all()
     return report_records
 
 
 
 
-@app.post("/reports")
+# status_code=201 means "Created", the standard answer when a new record is made.
+@app.post("/reports", response_model = ReportResponse, status_code=201)
 def receive_reports(report:Report,
                     db: Session = Depends(get_db)):
     
@@ -137,7 +181,9 @@ def receive_reports(report:Report,
         #this report are the values we get after pydantic model does it work
         type = report.type,
         message = report.message,
-        location = report.location
+        location = report.location,
+        latitude = report.latitude,
+        longitude = report.longitude
         #so we are telling the system this is our database model for receive_report and this is how it must seem.
     )
 
@@ -149,7 +195,7 @@ def receive_reports(report:Report,
     #but still notice that we are only tracking and there 
     # is no thing yet that we have pushed .. we use commit for this.
     db.commit()
-    return report
+    return new_report
 
 
 @app.delete("/reports/{report_id}")
@@ -164,4 +210,4 @@ def delete_reports(report_id:int , db:Session=Depends(get_db)):
 
     db.delete(existing_report)
     db.commit()
-    return {"Message": "Report Deleted Succesfully!!"}
+    return {"message": "Report deleted successfully"}

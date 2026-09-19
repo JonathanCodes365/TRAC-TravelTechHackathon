@@ -1,10 +1,115 @@
 @import "tailwindcss";
 
+/* Colors used across the app. Components use these (bg-surface, text-ink, border-line...)
+   so light and dark mode only change the values below. */
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
 }
 
 :root {
   color-scheme: light;
+  --canvas: #f4f5f8;
+  --surface: #ffffff;
+  --surface-muted: #eef0f4;
+  --line: #e1e4ea;
+  --line-strong: #c8cdd7;
+  --ink: #0f1729;
+  --ink-muted: #4b5567;
+  --ink-subtle: #7f889a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --canvas: #090c12;
+    --surface: #10151e;
+    --surface-muted: #18202c;
+    --line: #232c3a;
+    --line-strong: #354257;
+    --ink: #e8ebf1;
+    --ink-muted: #a3adbf;
+    --ink-subtle: #6f7a8e;
+  }
+}
+
+/* Leaflet map styling. "html" makes these win over leaflet.css, which loads later. */
+html .leaflet-container {
+  font-family: inherit;
+  background: var(--surface-muted);
+}
+
+html .leaflet-tooltip {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+html .leaflet-tooltip-top::before {
+  border-top-color: var(--surface);
+}
+
+html .leaflet-container .leaflet-bar {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+  overflow: hidden;
+}
+
+html .leaflet-bar a,
+html .leaflet-bar a:hover {
+  background: var(--surface);
+  color: var(--ink);
+  border-bottom-color: var(--line);
+}
+
+html .leaflet-container .leaflet-control-attribution {
+  background: color-mix(in oklab, var(--surface) 80%, transparent);
+  color: var(--ink-subtle);
+}
+
+html .leaflet-container .leaflet-control-attribution a {
+  color: var(--ink-muted);
+}
+
+/* OpenStreetMap only has light tiles, so turn them dark in dark mode. Pins aren't affected. */
+@media (prefers-color-scheme: dark) {
+  html .leaflet-tile-pane {
+    filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.6);
+  }
+}
+
+/* The pulsing ring around urgent pins on the map. */
+.pin-halo {
+  animation: pin-halo 1.8s ease-out infinite;
+}
+
+@keyframes pin-halo {
+  from {
+    stroke-width: 0;
+    stroke-opacity: 0.7;
+  }
+  to {
+    stroke-width: 28px;
+    stroke-opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin-halo {
+    animation: none;
+  }
 }
