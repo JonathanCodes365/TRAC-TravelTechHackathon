@@ -1,0 +1,131 @@
+"use client";
+
+import "leaflet/dist/leaflet.css";
+import { Fragment, useEffect, useRef } from "react";
+import { CircleMarker, MapContainer, Tooltip, useMap } from "react-leaflet";
+import { DEFAULT_CENTER, DEFAULT_ZOOM, MapTiles, TrackSize } from "@/components/map/shared";
+import { usePrefersDark } from "@/lib/hooks";
+import {
+  REPORT_TYPES,
+  STATUS_INFO,
+  TYPE_INFO,
+  hasCoords,
+  isUrgent,
+  type PinnedReport,
+  type Report,
+} from "@/lib/reports";
+
+type Props = {
+  reports: Report[];
+  selectedId?: number | null;
+  onSelect?: (id: number) => void;
+  showLegend?: boolean;
+};
+
+export default function ReportsMap({ reports, selectedId = null, onSelect, showLegend = true }: Props) {
+  const pins = reports.filter(hasCoords);
+  const dark = usePrefersDark();
+  const outline = dark ? "#0b0f16" : "#ffffff";
+
+  return (
+    <div className="relative isolate h-full w-full">
+      <MapContainer center={DEFAULT_CENTER} zoom={DEFAULT_ZOOM} className="h-full w-full">
+        <MapTiles />
+        {pins.map((report) => {
+          const color = TYPE_INFO[report.type].color;
+          const selected = report.id === selectedId;
+          const center: [number, number] = [report.latitude, report.longitude];
+          return (
+            <Fragment key={report.id}>
+              {isUrgent(report) && (
+                <CircleMarker
+                  center={center}
+                  radius={9}
+                  interactive={false}
+                  pathOptions={{ className: "pin-halo", color, weight: 0, fill: false }}
+                />
+              )}
+              <CircleMarker
+                // A new key re-adds the selected pin last, so it's drawn on top of the others.
+                key={selected ? "selected" : "pin"}
+                center={center}
+                radius={selected ? 12 : 8}
+                eventHandlers={onSelect ? { click: () => onSelect(report.id) } : undefined}
+                pathOptions={{
+                  color: selected ? (dark ? "#ffffff" : "#0f1729") : outline,
+                  weight: selected ? 3 : 2,
+                  fillColor: color,
+                  fillOpacity: report.status === "resolved" ? 0.35 : 0.95,
+                }}
+              >
+                <Tooltip direction="top" offset={[0, -10]} opacity={1}>
+                  <span className="font-semibold">{TYPE_INFO[report.type].label}</span>
+                  <span className="text-ink-muted"> · {STATUS_INFO[report.status].label} · #{report.id}</span>
+                  <br />
+                  {report.message.length > 70 ? `${report.message.slice(0, 70)}…` : report.message}
+                </Tooltip>
+              </CircleMarker>
+            </Fragment>
+          );
+        })}
+        <FitToPins pins={pins} />
+        <FlyToSelected pins={pins} selectedId={selectedId} />
+        <TrackSize />
+      </MapContainer>
+
+      {showLegend && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-[1000] hidden rounded-xl border border-line bg-surface/90 px-3 py-2 text-[11px] text-ink-muted shadow-sm backdrop-blur sm:block">
+          {REPORT_TYPES.map((type) => (
+            <div key={type} className="flex items-center gap-2 py-0.5">
+              <span className="size-2.5 rounded-full" style={{ backgroundColor: TYPE_INFO[type].color }} />
+              {TYPE_INFO[type].label}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {pins.length === 0 && (
+        <p className="pointer-events-none absolute inset-x-0 top-3 z-[1000] mx-auto w-fit rounded-full border border-line bg-surface/90 px-3 py-1.5 text-xs text-ink-muted shadow-sm backdrop-blur">
+          No reports with a map location yet
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Zoom to the pins the first time any appear. After that, leave the view alone
+// so the 10-second refresh doesn't move the map while someone is using it.
+function FitToPins({ pins }: { pins: PinnedReport[] }) {
+  const map = useMap();
+  const fitted = useRef(false);
+
+  useEffect(() => {
+    if (fitted.current || pins.length === 0) return;
+    fitted.current = true;
+    if (pins.length === 1) {
+      map.setView([pins[0].latitude, pins[0].longitude], 13);
+    } else {
+      map.fitBounds(
+        pins.map((p) => [p.latitude, p.longitude] as [number, number]),
+        { padding: [48, 48], maxZoom: 13 },
+      );
+    }
+  }, [map, pins]);
+
+  return null;
+}
+
+// Fly to a report when it's selected in the list.
+function FlyToSelected({ pins, selectedId }: { pins: PinnedReport[]; selectedId: number | null }) {
+  const map = useMap();
+  const target = pins.find((p) => p.id === selectedId);
+  const lat = target?.latitude;
+  const lng = target?.longitude;
+
+  useEffect(() => {
+    if (lat === undefined || lng === undefined) return;
+    map.flyTo([lat, lng], Math.max(map.getZoom(), 12), { duration: 0.8 });
+  }, [map, lat, lng]);
+
+  return null;
+}

@@ -1,83 +1,76 @@
-// Report types and API calls shared by the report form and the dashboard.
-// They mirror the FastAPI schemas in the repo root (Reporttype, Report, ReportResponse).
+// Report data shared across the app. The types mirror backend/schemas.py.
 
 export const REPORT_TYPES = ["rescue", "injured", "missing", "incident", "safe"] as const;
-
 export type ReportType = (typeof REPORT_TYPES)[number];
 
-export const REPORT_TYPE_INFO: Record<ReportType, { label: string; hint: string; color: string }> = {
-  rescue: { label: "Rescue", hint: "Trapped or in danger", color: "#dc2626" },
-  injured: { label: "Injured", hint: "Hurt and needs medical help", color: "#ea580c" },
-  missing: { label: "Missing", hint: "Someone can't be found", color: "#7c3aed" },
-  incident: { label: "Incident", hint: "Landslide, flood, blocked road", color: "#ca8a04" },
-  safe: { label: "Safe", hint: "Let people know you're OK", color: "#16a34a" },
-};
-
-export type NewReport = {
-  type: ReportType;
-  message: string;
-  location: string | null;
-  // The backend ignores these until it has latitude/longitude columns.
-  // The dashboard map only shows reports that have them.
-  latitude: number | null;
-  longitude: number | null;
-};
+export const REPORT_STATUSES = ["open", "in_progress", "resolved"] as const;
+export type ReportStatus = (typeof REPORT_STATUSES)[number];
 
 export type Report = {
   id: number;
   type: ReportType;
   message: string;
   location: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  status: ReportStatus;
+  created_at: string | null;
 };
 
-export type PinnedReport = Report & { latitude: number; longitude: number };
+export type NewReport = Pick<Report, "type" | "message" | "location" | "latitude" | "longitude">;
+
+// Body for PATCH /reports/{id}: only the fields that change.
+export type ReportChanges = Partial<NewReport & { status: ReportStatus }>;
+
+export type Coords = { latitude: number; longitude: number };
+export type PinnedReport = Report & Coords;
+
+export const TYPE_INFO: Record<ReportType, { label: string; hint: string; color: string }> = {
+  rescue: { label: "Rescue", hint: "Trapped or in danger", color: "#ef4444" },
+  injured: { label: "Injured", hint: "Hurt and needs medical help", color: "#f97316" },
+  missing: { label: "Missing", hint: "Someone can't be found", color: "#8b5cf6" },
+  incident: { label: "Incident", hint: "Landslide, flood, blocked road", color: "#eab308" },
+  safe: { label: "Safe", hint: "Let people know you're OK", color: "#22c55e" },
+};
+
+export const STATUS_INFO: Record<ReportStatus, { label: string; hint: string; color: string }> = {
+  open: { label: "Open", hint: "Waiting for a response", color: "#f59e0b" },
+  in_progress: { label: "In progress", hint: "A team is responding", color: "#3b82f6" },
+  resolved: { label: "Resolved", hint: "Handled by the team", color: "#10b981" },
+};
+
+// Lower is more urgent. Used for "Most urgent" sorting and map highlights.
+const TYPE_PRIORITY: Record<ReportType, number> = { rescue: 0, injured: 1, missing: 2, incident: 3, safe: 4 };
+const STATUS_PRIORITY: Record<ReportStatus, number> = { open: 0, in_progress: 1, resolved: 2 };
 
 export function hasCoords(report: Report): report is PinnedReport {
   return typeof report.latitude === "number" && typeof report.longitude === "number";
 }
 
-// Requests go to /api/..., which next.config.ts forwards to the FastAPI backend.
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(`/api${path}`, { cache: "no-store", ...init });
-  } catch {
-    throw new Error("Couldn't reach the server. Check your connection and try again.");
-  }
-  if (!res.ok) throw new Error(await errorMessage(res));
-  return res.json();
+// Open rescue and injury reports get a pulsing pin and count as urgent.
+export function isUrgent(report: Report) {
+  return report.status === "open" && TYPE_PRIORITY[report.type] <= 1;
 }
 
-// FastAPI errors look like {"detail": "Report not found"} or, for invalid input (422),
-// {"detail": [{"loc": ["body", "message"], "msg": "Field required"}]}.
-async function errorMessage(res: Response): Promise<string> {
-  try {
-    const { detail } = await res.json();
-    if (typeof detail === "string") return detail;
-    if (Array.isArray(detail)) {
-      return detail
-        .map((d: { loc?: (string | number)[]; msg: string }) => `${d.loc?.at(-1) ?? "request"}: ${d.msg}`)
-        .join("; ");
-    }
-  } catch {
-    // Not JSON. A 500 from /api usually means the backend isn't running.
-  }
-  if (res.status >= 500) {
-    return `The server isn't responding (error ${res.status}). Is the backend running?`;
-  }
-  return `Request failed (error ${res.status}).`;
-}
+export type SortKey = "newest" | "oldest" | "urgent";
 
-export function createReport(report: NewReport) {
-  return request<unknown>("/reports", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(report),
-  });
-}
+export const SORT_LABELS: Record<SortKey, string> = {
+  newest: "Newest first",
+  oldest: "Oldest first",
+  urgent: "Most urgent",
+};
 
-export function fetchReports() {
-  return request<Report[]>("/reports");
+// Ids come from the database in order, so a higher id is a newer report.
+export function sortReports(reports: Report[], key: SortKey): Report[] {
+  const sorted = [...reports];
+  if (key === "oldest") return sorted.sort((a, b) => a.id - b.id);
+  if (key === "urgent") {
+    return sorted.sort(
+      (a, b) =>
+        STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status] ||
+        TYPE_PRIORITY[a.type] - TYPE_PRIORITY[b.type] ||
+        b.id - a.id,
+    );
+  }
+  return sorted.sort((a, b) => b.id - a.id);
 }
