@@ -33,12 +33,25 @@ reports_response = {
 def about():
     return details
 
-@app.get("/reports/{report_id}",response_model=list[ReportResponse])
-#here we are saying this end point returns a list of reports; and each report must follow ReportResponse Schema.
-def retrieve_reports(report_id:int ,db: Session = Depends(get_db)):
-    pass
-    report_records =db.query(ReportModel).all()
+@app.get("/reports/{report_id}", response_model=ReportResponse)
+# here we are saying this endpoint returns one report,
+# and that report must follow the ReportResponse schema.
+
+def retrieve_reports(report_id: int, db: Session = Depends(get_db)):
+    report_records = db.query(ReportModel).filter(ReportModel.id == report_id).first()
+
+    # report_id comes from the URL: /reports/{report_id}
+    # We query ReportModel, which is mapped to the "reports" table.
+    # Then we filter the table based on its id.
+    # We compare the id in the database with the report_id
+    # that came from the URL.
+    # If they match, .first() gives us that report.
+
     #after following the schema you will get your data from here.
+
+   #report_records =db.query(ReportModel).all()
+   #This would have gave us all the details of ReportModel after querying ....
+
     return report_records
     
     #This means ; use this query session to query the table represented by ReportModel
