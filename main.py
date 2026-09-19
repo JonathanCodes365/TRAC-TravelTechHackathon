@@ -89,8 +89,14 @@ def retrieve_all_reports(type:Reporttype | None = None,
     if type is not None:
         query = query.filter(ReportModel.type ==type)
     if location is not None:
-        query = query.filter(ReportModel.location ==location)
-        
+        query = query.filter(ReportModel.location.ilike(location))
+
+        # here we replaced == with ilike ... what ilike does it looks for 
+        # similarity patterns between ReportModel.Location and location.
+
+        #for example: the user enters pokhara and our database Contains Pokhara..
+        #nowe due to the ilike it looks for pattern.. and since pokhara is quite similar to Pokhara... it will show the same .. 
+
     report_records = query.all()
     return report_records
 
