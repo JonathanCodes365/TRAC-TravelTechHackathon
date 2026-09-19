@@ -56,12 +56,47 @@ Return ONLY valid JSON, no other text, no markdown fences, matching exactly this
   "status": one of ["missing", "injured", "rescued", "safe"] or null,
   "time": ISO 8601 string or null,
   "people_count": integer or null,
-  "action": string or null
+  "action": string or null,
+  "report_type": one of ["rescue", "injured", "missing", "incident", "safe"] or null
 }}
+
+report_type means: rescue = someone is trapped or in danger and still needs rescuing;
+injured = someone is hurt; missing = someone can't be found; incident = a hazard or event
+such as a landslide, flood or blocked road; safe = people are OK (including "were rescued").
 
 Report:
 \"\"\"{report_text}\"\"\"
 """
+
+
+# Words that show which kind of report a message is, most urgent first. The first kind that
+# matches wins, so "injured hiker was rescued" counts as injured. Note that "rescued" (already
+# out of danger) is a safe word, while "rescue" (still needs rescuing) is not.
+REPORT_TYPE_PATTERNS = [
+    ("rescue", r"\b(?:trapped|stuck|stranded|buried|drowning|sos|help us|need(?:s|ing)? (?:a )?rescue|rescue needed|can(?:no|'|’)t get out|water (?:\w+ )?rising)\b"),
+    ("injured", r"\b(?:injur(?:ed|y|ies)|hurt|bleeding|broken (?:leg|arm|bone|ankle|wrist)|fractur\w*|unconscious|wounded|sprain\w*|can(?:no|'|’)t walk)\b"),
+    ("missing", r"\b(?:missing|lost contact|lost track|can(?:no|'|’)t find|disappeared|not return(?:ed)?|didn(?:'|’)t return|hasn(?:'|’)t returned|no contact|no news|haven(?:'|’)t heard)\b"),
+    ("incident", r"\b(?:landslides?|flood(?:s|ed|ing)?|avalanche|blocked|road closed|bridge|earthquake|fire|storm|rockfall|collapsed?)\b"),
+    ("safe", r"\b(?:safe|rescued|evacuated|reached (?:the )?shelter|everyone is (?:ok|okay|fine)|all (?:ok|okay|fine)|we are (?:ok|okay|fine))\b"),
+]
+
+# Nouns that count people, as in "3 trekkers" or "two climbers".
+PEOPLE_WORDS = r"(?:tourists?|people|persons?|travell?ers?|hikers?|trekkers?|climbers?|passengers?|students?|children|kids?|members?|porters?|guides?|visitors?|adults?|men|women|friends?)"
+
+
+def _report_type(text: str):
+    for report_type, pattern in REPORT_TYPE_PATTERNS:
+        if re.search(pattern, text):
+            return report_type
+    return None
+
+
+def extraction_mode() -> str:
+    """How extract() works right now: "rules" (keyword rules), or the language model provider."""
+    cfg = PROVIDERS.get(AI_PROVIDER)
+    if USE_MOCK or cfg is None or not os.environ.get(cfg["key_env"]):
+        return "rules"
+    return AI_PROVIDER
 
 
 def _mock_extract(report_text: str) -> dict:
@@ -86,10 +121,14 @@ def _mock_extract(report_text: str) -> dict:
         "eight": 8,
         "nine": 9,
         "ten": 10,
+        "eleven": 11,
+        "twelve": 12,
+        "fifteen": 15,
+        "twenty": 20,
     }
 
     count_match = re.search(
-        r"\b(\d+)\s+(?:tourists?|people|persons?|travelers?|hikers?|trekkers?)\b",
+        rf"\b(\d+)\s+(?:\w+\s+)?{PEOPLE_WORDS}\b",
         text
     )
 
@@ -100,11 +139,19 @@ def _mock_extract(report_text: str) -> dict:
 
         for word, number in number_words.items():
             if re.search(
-                rf"\b{word}\s+(?:tourists?|people|persons?|travelers?|hikers?|trekkers?)\b",
+                rf"\b{word}\s+(?:\w+\s+)?{PEOPLE_WORDS}\b",
                 text
             ):
                 people_count = number
                 break
+
+    # "family of 4", "group of five", "3 of us"
+    if people_count is None:
+        number = r"(\d+|" + "|".join(number_words) + r")"
+        group_match = re.search(rf"\b(?:family|group|team|party) of {number}\b|\b{number} of us\b", text)
+        if group_match:
+            value = group_match.group(1) or group_match.group(2)
+            people_count = int(value) if value.isdigit() else number_words[value]
 
     # Detect a location after words such as "near", "at", "in", or "around".
     location_match = re.search(
@@ -147,6 +194,7 @@ def _mock_extract(report_text: str) -> dict:
         "time": extracted_time,
         "people_count": people_count,
         "action": None,
+        "report_type": _report_type(text),
         "_mock": True,
     }
 

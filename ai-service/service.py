@@ -1,10 +1,12 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 import joblib
 
-from extraction import extract as run_extraction
+from extraction import extract as run_extraction, extraction_mode
 from features import build_feature_vector
 from report_features import build_report_feature_vector
 
@@ -18,15 +20,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-duplicate_model = joblib.load("model.pkl")
-report_duplicate_model = joblib.load("report_model.pkl")
+# Load the models from this folder, whichever folder the service is started from.
+HERE = os.path.dirname(os.path.abspath(__file__))
+duplicate_model = joblib.load(os.path.join(HERE, "model.pkl"))
+report_duplicate_model = joblib.load(os.path.join(HERE, "report_model.pkl"))
 
 MERGE_THRESHOLD = 0.80
 REVIEW_THRESHOLD = 0.40
 
 
 class ExtractRequest(BaseModel):
-    report_text: str
+    # min_length=1: an empty report has nothing to extract.
+    report_text: str = Field(min_length=1, max_length=5000)
 
 
 class PersonRecord(BaseModel):
@@ -118,4 +123,5 @@ def check_report_duplicate_endpoint(req: ReportDuplicateCheckRequest):
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    # "extraction" says how /extract works right now: "rules" (keywords) or a provider like "openai".
+    return {"status": "ok", "extraction": extraction_mode()}
