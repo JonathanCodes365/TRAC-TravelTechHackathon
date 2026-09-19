@@ -23,4 +23,15 @@ class Report(BaseModel):
     message:str
     location:Optional[str]=None
 
+
+class ReportResponse(BaseModel):
+    id: int
+    type:Reporttype
+    message:str
+    location:Optional[str] = None
+
+    model_config = {
+        "from_attributes":True
+    }
+
 #here we create our pydantic checking for the incoming info:

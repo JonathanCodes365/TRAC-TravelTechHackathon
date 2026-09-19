@@ -1,0 +1,15 @@
+So inorder to do the Read part of CRUD operations...
+
+We need to 1st decide a end point that will decide which what will actually trigger this response.
+
+we will make it .. @app.get("/reports")
+
+so we would do ...report_records =  db.query(ReportModel).all()
+
+# which obviously means 
+
+1. db = represents session.
+2. So, using this session retrieve all the records represented by ReportmModel.
+
+But we must take note that report_records contains SQLAlchemy objects..
+#But since this is FASTApi ; it can return this data into JSON for users.
