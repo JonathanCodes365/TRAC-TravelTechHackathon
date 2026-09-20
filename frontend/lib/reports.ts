@@ -11,8 +11,10 @@ export type Report = {
   type: ReportType;
   message: string;
   location: string | null;
-  latitude: number | null;
-  longitude: number | null;
+  incident_latitude: number | null;
+  incident_longitude: number | null;
+  reporter_latitude: number | null;
+  reporter_longitude: number | null;
   status: ReportStatus;
   created_at: string | null;
   // Filled in by the AI service a moment after the report is saved (backend/ai.py).
@@ -26,7 +28,7 @@ export type Report = {
   duplicate_state: "suggested" | "confirmed" | "dismissed" | null;
 };
 
-export type NewReport = Pick<Report, "type" | "message" | "location" | "latitude" | "longitude">;
+export type NewReport = Pick<Report, "type" | "message" | "location" | "incident_latitude" | "incident_longitude" | "reporter_latitude" | "reporter_longitude">;
 
 // Body for PATCH /reports/{id}: only the fields that change.
 export type ReportChanges = Partial<
@@ -61,7 +63,10 @@ export function duplicateLabel(score: number | null) {
 }
 
 export type Coords = { latitude: number; longitude: number };
-export type PinnedReport = Report & Coords;
+export type PinnedReport = Report & {
+  incident_latitude: number;
+  incident_longitude: number;
+}
 
 export const TYPE_INFO: Record<ReportType, { label: string; hint: string; color: string }> = {
   rescue: { label: "Rescue", hint: "Trapped or in danger", color: "#ef4444" },
@@ -82,7 +87,8 @@ const TYPE_PRIORITY: Record<ReportType, number> = { rescue: 0, injured: 1, missi
 const STATUS_PRIORITY: Record<ReportStatus, number> = { open: 0, in_progress: 1, resolved: 2 };
 
 export function hasCoords(report: Report): report is PinnedReport {
-  return typeof report.latitude === "number" && typeof report.longitude === "number";
+  return (
+    typeof report.incident_latitude === "number" && typeof report.incident_longitude === "number");
 }
 
 // Open rescue and injury reports get a pulsing pin and count as urgent.

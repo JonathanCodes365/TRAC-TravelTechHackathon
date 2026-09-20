@@ -20,6 +20,29 @@ import {
 
 const MAX_MESSAGE = 1000;
 
+async function findPlace(place: string): Promise<Coords | null> {
+  const query = `${place}, Nepal`;
+
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`,
+  );
+
+  if (!response.ok) {
+    throw new Error("Could not search for that place.");
+  }
+
+  const results = await response.json();
+
+  if (!results.length) {
+    return null;
+  }
+
+  return {
+    latitude: Number(Number(results[0].lat).toFixed(6)),
+    longitude: Number(Number(results[0].lon).toFixed(6)),
+  };
+}
+
 // Leaflet needs `window`, so the map only renders in the browser.
 const LocationPicker = dynamic(() => import("@/components/map/LocationPicker"), {
   ssr: false,
@@ -34,8 +57,10 @@ export default function ReportForm() {
   const [message, setMessage] = useState("");
   const [location, setLocation] = useState("");
   const [coords, setCoords] = useState<Coords | null>(null);
+  const [reporterCoords, setReporterCoords] = useState<Coords | null>(null);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [searchingPlace, setSearchingPlace] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<Report | null>(null);
@@ -54,7 +79,7 @@ export default function ReportForm() {
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setCoords({
+        setReporterCoords({
           latitude: Number(position.coords.latitude.toFixed(6)),
           longitude: Number(position.coords.longitude.toFixed(6)),
         });
@@ -63,13 +88,40 @@ export default function ReportForm() {
       (err) => {
         setLocationError(
           err.code === err.PERMISSION_DENIED
-            ? "Location permission was denied. Tap the map to mark your spot instead."
-            : "Couldn’t get your location. Try again, or tap the map.",
+            ? "Location permission was denied. You can still send the report."
+            : "Couldn’t get your location. You can still send the report.",
         );
         setLocating(false);
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
     );
+  }
+
+  async function searchPlace() {
+    const place = location.trim();
+
+    if (!place) {
+      setLocationError("Enter a place name first.");
+      return;
+    }
+
+    setLocationError(null);
+    setSearchingPlace(true);
+
+    try {
+      const found = await findPlace(place);
+
+      if (!found) {
+        setLocationError(`Couldn’t find "${place}". Try a more specific place name.`);
+        return;
+      }
+
+      setCoords(found);
+    } catch {
+      setLocationError("Couldn’t search for that place. Try again or tap the map.");
+    } finally {
+      setSearchingPlace(false);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -89,8 +141,11 @@ export default function ReportForm() {
         type,
         message: message.trim(),
         location: location.trim() || null,
-        latitude: coords?.latitude ?? null,
-        longitude: coords?.longitude ?? null,
+        incident_latitude: coords?.latitude ?? null,
+        incident_longitude: coords?.longitude ?? null,
+
+        reporter_latitude: reporterCoords?.latitude ?? null,
+        reporter_longitude: reporterCoords?.longitude ?? null,
       });
       setSent(report);
     } catch (err) {
@@ -100,9 +155,25 @@ export default function ReportForm() {
     }
   }
 
-  function applySuggestion(suggestion: AiSuggestion["suggested_report"]) {
-    if (suggestion.type) setType(suggestion.type);
-    if (suggestion.location && !location.trim()) setLocation(suggestion.location);
+  async function applySuggestion(suggestion: AiSuggestion["suggested_report"]) {
+    if (suggestion.type) {
+      setType(suggestion.type);
+    }
+
+    if (suggestion.location && !location.trim()) {
+      setLocation(suggestion.location);
+
+      try {
+        const found = await findPlace(suggestion.location);
+
+        if (found) {
+          setCoords(found);
+        }
+      } catch {
+        // If geocoding fails, the place name is still filled in.
+        // The user can manually search for it or tap the map.
+      }
+    }
   }
 
   function startOver() {
@@ -110,6 +181,7 @@ export default function ReportForm() {
     setMessage("");
     setLocation("");
     setCoords(null);
+    setReporterCoords(null);
     setLocationError(null);
     setError(null);
     setSent(null);
@@ -223,21 +295,31 @@ export default function ReportForm() {
         </div>
       </Step>
 
-      <Step number={3} title="Where are you?" optional>
-        <div className="relative">
-          <MapPin className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-ink-subtle" />
-          <label htmlFor="location" className="sr-only">
-            Place name
-          </label>
-          <input
-            id="location"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="Place name, e.g. Lakeside, Pokhara"
-            autoComplete="off"
-            maxLength={200}
-            className={`${inputClass} pl-10`}
-          />
+      <Step number={3} title="Where is the incident?" optional>
+        <div>
+          <div className="relative">
+            <MapPin className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-ink-subtle" />
+            <label htmlFor="location" className="sr-only">
+              Place name
+            </label>
+            <input
+              id="location"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Place name, e.g. Lakeside, Pokhara"
+              autoComplete="off"
+              maxLength={200}
+              className={`${inputClass} pl-10`}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={searchPlace}
+            disabled={searchingPlace || !location.trim()}
+            className="mt-2 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium hover:border-line-strong disabled:opacity-60"
+          >
+            {searchingPlace ? "Finding place..." : "Find on map"}
+          </button>
         </div>
 
         <div className="mt-3 overflow-hidden rounded-2xl border border-line">
@@ -245,24 +327,11 @@ export default function ReportForm() {
             <LocationPicker value={coords} onChange={setCoords} />
             {!coords && (
               <p className="pointer-events-none absolute inset-x-0 top-2.5 z-[1000] mx-auto w-fit rounded-full bg-surface/90 px-3 py-1 text-xs text-ink-muted shadow-sm backdrop-blur">
-                Tap the map to mark your spot
+                Tap the map to mark the incident location.
               </p>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line bg-surface-muted/60 px-3 py-2.5">
-            <button
-              type="button"
-              onClick={locateMe}
-              disabled={locating}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium hover:border-line-strong disabled:opacity-60"
-            >
-              {locating ? (
-                <LoaderCircle className="size-4 animate-spin" aria-hidden />
-              ) : (
-                <LocateFixed className="size-4" aria-hidden />
-              )}
-              {locating ? "Finding you…" : "Use my location"}
-            </button>
             {coords ? (
               <span className="inline-flex items-center gap-2 text-sm text-ink-muted">
                 <span className="font-mono text-xs">{formatCoords(coords.latitude, coords.longitude)}</span>
@@ -281,6 +350,46 @@ export default function ReportForm() {
           </div>
         </div>
         {locationError && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{locationError}</p>}
+      </Step>
+
+      <Step number={4} title="Where are you reporting from?" optional>
+        <div className="rounded-2xl border border-line bg-surface-muted/60 p-4">
+          <p className="text-sm text-ink-muted">
+            This helps coordinators understand where the report came from. It is separate from the incident location.
+          </p>
+
+          <button
+            type="button"
+            onClick={locateMe}
+            disabled={locating}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium hover:border-line-strong disabled:opacity-60"
+          >
+            {locating ? (
+              <LoaderCircle className="size-4 animate-spin" aria-hidden />
+            ) : (
+              <LocateFixed className="size-4" aria-hidden />
+            )}
+            {locating ? "Finding you…" : "Use my location"}
+          </button>
+
+          {reporterCoords ? (
+            <span className="mt-3 inline-flex items-center gap-2 text-sm text-ink-muted">
+              <span className="font-mono text-xs">
+                {formatCoords(reporterCoords.latitude, reporterCoords.longitude)}
+              </span>
+              <button
+                type="button"
+                onClick={() => setReporterCoords(null)}
+                className="rounded-md p-0.5 text-ink-subtle hover:bg-surface hover:text-ink"
+                aria-label="Clear reporter location"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            </span>
+          ) : (
+            <p className="mt-2 text-xs text-ink-subtle">No reporter location marked yet</p>
+          )}
+        </div>
       </Step>
 
       {error && (

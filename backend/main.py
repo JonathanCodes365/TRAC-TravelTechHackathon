@@ -98,8 +98,12 @@ def update_report(report_id:int , to_update_report: Report, background_tasks: Ba
     #but we havent yet committed it yet.
 
     #doing the same for latitude and longitude
-    existing_report.latitude = to_update_report.latitude
-    existing_report.longitude = to_update_report.longitude
+    existing_report.incident_latitude = to_update_report.incident_latitude
+    existing_report.incident_longitude = to_update_report.incident_longitude
+
+    existing_report.reporter_latitude = to_update_report.reporter_latitude
+    existing_report.reporter_longitude = to_update_report.reporter_longitude
+
     # The text changed, so ask the AI to check the report again.
     existing_report.ai_state = "pending"
     db.commit()
@@ -286,8 +290,12 @@ def receive_reports(report:Report,
         type = report.type,
         message = report.message,
         location = report.location,
-        latitude = report.latitude,
-        longitude = report.longitude
+        incident_latitude = report.incident_latitude,
+        incident_longitude = report.incident_longitude,
+
+        reporter_latitude = report.reporter_latitude,
+        reporter_longitude = report.reporter_longitude
+
         #so we are telling the system this is our database model for receive_report and this is how it must seem.
     )
 

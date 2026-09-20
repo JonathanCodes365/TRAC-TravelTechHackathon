@@ -36,9 +36,10 @@ class Report(BaseModel):
     #we are making sure these are additional as well.. cause if there is no location
     #there might be no latitude and longitude to work with.
     # ge/le keep them on the map: latitude is -90..90 and longitude is -180..180.
-    latitude:Optional[float]= Field(default=None, ge=-90, le=90)
-    longitude:Optional[float]= Field(default=None, ge=-180, le=180)
-
+    incident_latitude:Optional[float]= Field(default=None, ge=-90, le=90)
+    incident_longitude:Optional[float]= Field(default=None, ge=-180, le=180)
+    reporter_latitude:Optional[float]= Field(default=None, ge=-90, le=90)
+    reporter_longitude:Optional[float]= Field(default=None, ge=-180, le=180)
     # Trim spaces around text, so "   " doesn't count as a message.
     model_config = {"str_strip_whitespace": True}
 
@@ -50,19 +51,23 @@ class Report(BaseModel):
     @model_validator(mode="after")
     def coordinates_come_in_pairs(self):
         # A latitude without a longitude (or the other way round) isn't a place.
-        if (self.latitude is None) != (self.longitude is None):
-            raise ValueError("latitude and longitude must be sent together")
+        if (self.incident_latitude is None) != (self.incident_longitude is None):
+            raise ValueError("incident latitude and longitude must be sent together")
+        if (self.reporter_latitude is None) != (self.reporter_longitude is None):
+            raise ValueError("incident latitude and longitude must be sent together")
+
         return self
-
-
 class ReportUpdate(BaseModel):
     # Body for PATCH /reports/{id}: send only the fields you want to change,
     # for example {"status": "resolved"}.
     type: Optional[Reporttype] = None
     message: Optional[str] = Field(default=None, min_length=1, max_length=2000)
     location: Optional[str] = Field(default=None, max_length=200)
-    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
-    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    incident_latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    incident_longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    reporter_latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    reporter_longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+
     status: Optional[ReportStatus] = None
     # A coordinator's answer to the AI's duplicate suggestion.
     duplicate_state: Optional[Literal["confirmed", "dismissed"]] = None
@@ -80,8 +85,10 @@ class ReportUpdate(BaseModel):
         for name in ("type", "message", "status", "duplicate_state"):
             if name in sent and getattr(self, name) is None:
                 raise ValueError(f"{name} can't be empty")
-        if ("latitude" in sent) != ("longitude" in sent) or (self.latitude is None) != (self.longitude is None):
-            raise ValueError("latitude and longitude must be changed together")
+        if ("incident_latitude" in sent) != ("incident_longitude" in sent) or (self.incident_latitude is None) != (self.incident_longitude is None):
+            raise ValueError("incident latitude and longitude must be changed together")
+        if ("reporter_latitude" in sent) != ("reporter_longitude" in sent) or (self.reporter_latitude is None) != (self.reporter_longitude is None):
+                raise ValueError("reporter latitude and longitude must be changed together")
         return self
 
 
@@ -92,8 +99,12 @@ class ReportResponse(BaseModel):
     location:Optional[str] = None
 
     #adding functionality of latitude and longitude
-    latitude:Optional[float]=None
-    longitude:Optional[float]=None
+    incident_latitude:Optional[float]=None
+    incident_longitude:Optional[float]=None
+
+    reporter_latitude:Optional[float]=None
+    reporter_longitude:Optional[float]=None
+
 
     status: ReportStatus = ReportStatus.OPEN
     created_at: Optional[datetime] = None

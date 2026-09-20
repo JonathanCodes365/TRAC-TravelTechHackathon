@@ -156,7 +156,8 @@ def _mock_extract(report_text: str) -> dict:
     # Detect a location after words such as "near", "at", "in", or "around".
     location_match = re.search(
         r"\b(?:near|at|in|around)\s+([A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*)*)",
-        report_text
+        report_text,
+        re.IGNORECASE
     )
 
     location = location_match.group(1) if location_match else None

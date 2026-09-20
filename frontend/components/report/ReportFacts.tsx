@@ -27,17 +27,17 @@ export default function ReportFacts({ report, now }: { report: Report; now: numb
       <Fact label="GPS">
         {hasCoords(report) ? (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs">{formatCoords(report.latitude, report.longitude)}</span>
+            <span className="font-mono text-xs">{formatCoords(report.incident_latitude, report.incident_longitude)}</span>
             <button
               type="button"
-              onClick={() => copyCoords(formatCoords(report.latitude, report.longitude))}
+              onClick={() => copyCoords(formatCoords(report.incident_latitude, report.incident_longitude))}
               className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-medium text-ink-muted hover:text-ink"
             >
               <Copy className="size-3.5" aria-hidden />
               Copy
             </button>
             <a
-              href={googleMapsUrl(report.latitude, report.longitude)}
+              href={googleMapsUrl(report.incident_latitude, report.incident_longitude)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-medium text-ink-muted hover:text-ink"

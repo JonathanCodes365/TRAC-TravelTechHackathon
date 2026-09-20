@@ -36,9 +36,12 @@ class ReportModel(Base):
 
     location:Mapped[str | None] = mapped_column(String,nullable = True)
 
-    #adding latitude and longitude
-    latitude: Mapped[float | None] = mapped_column(nullable=True)
-    longitude: Mapped[float | None] = mapped_column(nullable=True)
+    #adding latitude and longitude of where incident occured.
+    incident_latitude: Mapped[float | None] = mapped_column(nullable=True)
+    incident_longitude: Mapped[float | None] = mapped_column(nullable=True)
+
+    reporter_latitude: Mapped[float | None] = mapped_column(nullable=True)
+    reporter_longitude: Mapped[float | None] = mapped_column(nullable=True)
 
     # Where the report is in the response workflow: open, in_progress or resolved.
     # It's stored as plain text (not a database enum) so it can be added to an existing table.
