@@ -1,10 +1,13 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
+import { latLng } from "leaflet";
 import { Fragment, useEffect, useRef } from "react";
 import { CircleMarker, MapContainer, Tooltip, useMap } from "react-leaflet";
 import { DEFAULT_CENTER, DEFAULT_ZOOM, MapTiles, TrackSize } from "@/components/map/shared";
+import ZoneCircles from "@/components/map/ZoneCircles";
 import { usePrefersDark } from "@/lib/hooks";
+import type { DangerZone } from "@/lib/zones";
 import {
   REPORT_TYPES,
   STATUS_INFO,
@@ -21,9 +24,21 @@ type Props = {
   selectedId?: number | null;
   onSelect?: (id: number) => void;
   showLegend?: boolean;
+  // Disaster areas to draw, and the one to zoom to when a coordinator picks it from the list.
+  zones?: DangerZone[];
+  focusZoneId?: number | null;
+  onSelectZone?: (id: number) => void;
 };
 
-export default function ReportsMap({ reports, selectedId = null, onSelect, showLegend = true }: Props) {
+export default function ReportsMap({
+  reports,
+  selectedId = null,
+  onSelect,
+  showLegend = true,
+  zones = [],
+  focusZoneId = null,
+  onSelectZone,
+}: Props) {
   const pins = reports.filter(hasCoords);
   const dark = usePrefersDark();
   const outline = dark ? "#0b0f16" : "#ffffff";
@@ -32,6 +47,7 @@ export default function ReportsMap({ reports, selectedId = null, onSelect, showL
     <div className="relative isolate h-full w-full">
       <MapContainer center={DEFAULT_CENTER} zoom={DEFAULT_ZOOM} className="h-full w-full">
         <MapTiles />
+        <ZoneCircles zones={zones} onSelect={onSelectZone} />
         {pins.map((report) => {
           const color = TYPE_INFO[report.type].color;
           const selected = report.id === selectedId;
@@ -83,6 +99,7 @@ export default function ReportsMap({ reports, selectedId = null, onSelect, showL
         })}
         <FitToPins pins={pins} />
         <FlyToSelected pins={pins} selectedId={selectedId} />
+        <FlyToZone zones={zones} focusId={focusZoneId} />
         <TrackSize />
       </MapContainer>
 
@@ -114,6 +131,7 @@ function FitToPins({ pins }: { pins: PinnedReport[] }) {
 
   useEffect(() => {
     if (fitted.current || pins.length === 0) return;
+
     fitted.current = true;
     if (pins.length === 1) {
       map.setView([pins[0].incident_latitude, pins[0].incident_longitude], 13);
@@ -124,6 +142,22 @@ function FitToPins({ pins }: { pins: PinnedReport[] }) {
       );
     }
   }, [map, pins]);
+
+  return null;
+}
+
+// Zoom to a disaster area when someone picks it from the alerts.
+function FlyToZone({ zones, focusId }: { zones: DangerZone[]; focusId: number | null }) {
+  const map = useMap();
+  const zone = zones.find((z) => z.id === focusId);
+  const latitude = zone?.center_latitude;
+  const longitude = zone?.center_longitude;
+  const radius = zone?.radius_km;
+
+  useEffect(() => {
+    if (latitude === undefined || longitude === undefined || radius === undefined) return;
+    map.fitBounds(latLng(latitude, longitude).toBounds(radius * 2400), { maxZoom: 13 });
+  }, [map, latitude, longitude, radius]);
 
   return null;
 }

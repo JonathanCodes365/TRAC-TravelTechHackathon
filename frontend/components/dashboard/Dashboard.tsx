@@ -8,8 +8,9 @@ import ReportList from "@/components/dashboard/ReportList";
 import ReportPanel from "@/components/dashboard/ReportPanel";
 import StatCards from "@/components/dashboard/StatCards";
 import Toolbar, { NO_FILTERS, type Filters } from "@/components/dashboard/Toolbar";
+import ZoneAlerts from "@/components/dashboard/ZoneAlerts";
 import { errorText } from "@/lib/api";
-import { REFRESH_MS, useNow, useReports } from "@/lib/hooks";
+import { REFRESH_MS, useNow, useReports, useZones } from "@/lib/hooks";
 import { hasDuplicateSuggestion, sortReports, type Report } from "@/lib/reports";
 
 // Leaflet needs `window`, so the map only renders in the browser.
@@ -21,8 +22,10 @@ const ReportsMap = dynamic(() => import("@/components/map/ReportsMap"), {
 export default function Dashboard() {
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const { data: reports, error, isValidating, mutate } = useReports(() => setUpdatedAt(new Date()));
+  const { data: zones } = useZones();
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [focusedZoneId, setFocusedZoneId] = useState<number | null>(null);
   const now = useNow();
   const sideRef = useRef<HTMLDivElement>(null);
 
@@ -89,13 +92,22 @@ export default function Dashboard() {
         </p>
       )}
 
+      <ZoneAlerts zones={zones ?? []} focusedId={focusedZoneId} onFocus={setFocusedZoneId} />
+
       <StatCards reports={all} now={now} loading={!reports && !error} />
 
       <Toolbar reports={all} filters={filters} onChange={setFilters} />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="h-[420px] overflow-hidden rounded-3xl border border-line bg-surface shadow-sm lg:h-[680px]">
-          <ReportsMap reports={visible} selectedId={selectedId} onSelect={select} />
+          <ReportsMap
+            reports={visible}
+            selectedId={selectedId}
+            onSelect={select}
+            zones={zones ?? []}
+            focusZoneId={focusedZoneId}
+            onSelectZone={setFocusedZoneId}
+          />
         </div>
 
         <div ref={sideRef} className="scroll-mt-24 lg:h-[680px]">

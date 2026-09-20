@@ -30,6 +30,11 @@ export function useReport(id: number | null) {
   });
 }
 
+// The disaster areas being tracked right now, refreshed every 20 seconds.
+export function useZones() {
+  return useSWR("zones", api.listZones, { refreshInterval: 20_000, keepPreviousData: true });
+}
+
 // Whether the backend, the database and the AI service are all working.
 export function useSystemHealth(): { state: "checking" | "online" | "offline"; health?: SystemHealth } {
   const { data, error } = useSWR("health", api.health, { refreshInterval: 15_000 });

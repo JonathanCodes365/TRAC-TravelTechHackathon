@@ -1,4 +1,5 @@
-import type { AiSuggestion, NewReport, Report, ReportChanges, SystemHealth } from "@/lib/reports";
+import type { AiSuggestion, Coords, NewReport, Report, ReportChanges, SystemHealth } from "@/lib/reports";
+import type { DangerZone, SafeRoute } from "@/lib/zones";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -73,4 +74,8 @@ export const api = {
     send<AiSuggestion>("/reports/analyze", "POST", { report_text: text }, signal),
   // Run the AI check on a saved report again.
   reanalyze: (id: number) => send<Report>(`/reports/${id}/analyze`, "POST"),
+  // Disaster areas the backend is tracking right now.
+  listZones: () => request<DangerZone[]>("/zones"),
+  // Ways to travel from one place to another, marked with the danger areas they cross.
+  safeRoute: (start: Coords, end: Coords) => send<SafeRoute>("/routes/safe", "POST", { start, end }),
 };
