@@ -4,21 +4,24 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import {
   CircleCheck,
-  Flag,
   LoaderCircle,
   LocateFixed,
-  MapPin,
   RotateCw,
   Route,
   ShieldCheck,
   TriangleAlert,
 } from "lucide-react";
+import PlaceSearch from "@/components/PlaceSearch";
 import { HazardIcon } from "@/components/dashboard/ZoneAlerts";
 import { api, errorText } from "@/lib/api";
 import { formatCoords } from "@/lib/format";
 import { useZones } from "@/lib/hooks";
 import type { Coords } from "@/lib/reports";
 import { SEVERITY_INFO, formatDuration, hazardLabel, type DangerZone, type SafeRoute } from "@/lib/zones";
+
+// Somewhere chosen for the journey, and what to call it: a place name when it was typed
+// or searched for, the coordinates when it was tapped on the map.
+type Spot = { coords: Coords; name: string };
 
 // Leaflet needs `window`, so the map only renders in the browser.
 const RouteMap = dynamic(() => import("@/components/map/RouteMap"), {
@@ -28,8 +31,8 @@ const RouteMap = dynamic(() => import("@/components/map/RouteMap"), {
 
 export default function SafeRoutePlanner() {
   const { data: liveZones } = useZones();
-  const [start, setStart] = useState<Coords | null>(null);
-  const [end, setEnd] = useState<Coords | null>(null);
+  const [start, setStart] = useState<Spot | null>(null);
+  const [end, setEnd] = useState<Spot | null>(null);
   const [picking, setPicking] = useState<"start" | "end">("start");
   const [result, setResult] = useState<SafeRoute | null>(null);
   const [checking, setChecking] = useState(false);
@@ -42,14 +45,21 @@ export default function SafeRoutePlanner() {
   const zones = result?.zones ?? liveZones ?? [];
   const zonesChanged = zonesWhenChecked !== null && liveZones !== undefined && zonesWhenChecked !== signature(liveZones);
 
+  // A tap on the map fills whichever box is waiting for a point.
   function pick(coords: Coords) {
+    const spot = { coords, name: formatCoords(coords.latitude, coords.longitude) };
     if (picking === "start") {
-      setStart(coords);
+      setStart(spot);
       setPicking("end");
     } else {
-      setEnd(coords);
+      setEnd(spot);
       setPicking("start");
     }
+  }
+
+  function choose(which: "start" | "end", coords: Coords, name: string) {
+    (which === "start" ? setStart : setEnd)({ coords, name });
+    setPicking(which === "start" ? "end" : "start");
   }
 
   function useMyLocation() {
@@ -62,8 +72,11 @@ export default function SafeRoutePlanner() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setStart({
-          latitude: Number(position.coords.latitude.toFixed(6)),
-          longitude: Number(position.coords.longitude.toFixed(6)),
+          coords: {
+            latitude: Number(position.coords.latitude.toFixed(6)),
+            longitude: Number(position.coords.longitude.toFixed(6)),
+          },
+          name: "Where I am now",
         });
         setPicking("end");
         setLocating(false);
@@ -81,7 +94,7 @@ export default function SafeRoutePlanner() {
     setChecking(true);
     setError(null);
     try {
-      const route = await api.safeRoute(start, end);
+      const route = await api.safeRoute(start.coords, end.coords);
       setResult(route);
       setCheckedAt(new Date());
       setZonesWhenChecked(signature(route.zones));
@@ -97,30 +110,39 @@ export default function SafeRoutePlanner() {
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
       <div className="order-2 h-[420px] overflow-hidden rounded-3xl border border-line bg-surface shadow-sm lg:order-1 lg:h-[640px]">
-        <RouteMap start={start} end={end} routes={result?.routes ?? []} zones={zones} onPick={pick} />
+        <RouteMap
+          start={start?.coords ?? null}
+          end={end?.coords ?? null}
+          routes={result?.routes ?? []}
+          zones={zones}
+          onPick={pick}
+        />
       </div>
 
       <div className="order-1 space-y-4 lg:order-2">
         <section className="rounded-3xl border border-line bg-surface p-5 shadow-sm">
           <h2 className="font-semibold">Where are you going?</h2>
           <p className="mt-1 text-sm text-ink-muted">
-            Tap the map to set {picking === "start" ? "your starting point" : "your destination"}.
+            Type a place name, or tap the map to set{" "}
+            {picking === "start" ? "your starting point" : "your destination"}.
           </p>
 
-          <div className="mt-4 space-y-2">
-            <PointRow
-              icon={MapPin}
+          <div className="mt-4 space-y-3">
+            <PlaceSearch
               label="From"
-              coords={start}
-              active={picking === "start"}
-              onPickAgain={() => setPicking("start")}
+              display={start?.name ?? ""}
+              placeholder={picking === "start" ? "Type a place, or tap the map" : "Where are you now?"}
+              pickingOnMap={picking === "start"}
+              onChoose={(coords, name) => choose("start", coords, name)}
+              onPickOnMap={() => setPicking("start")}
             />
-            <PointRow
-              icon={Flag}
+            <PlaceSearch
               label="To"
-              coords={end}
-              active={picking === "end"}
-              onPickAgain={() => setPicking("end")}
+              display={end?.name ?? ""}
+              placeholder={picking === "end" ? "Type a place, or tap the map" : "Where are you going?"}
+              pickingOnMap={picking === "end"}
+              onChoose={(coords, name) => choose("end", coords, name)}
+              onPickOnMap={() => setPicking("end")}
             />
           </div>
 
@@ -246,38 +268,6 @@ function signature(zones: DangerZone[]) {
     .map((zone) => `${zone.id}:${zone.updated_at}`)
     .sort()
     .join("|");
-}
-
-function PointRow({
-  icon: Icon,
-  label,
-  coords,
-  active,
-  onPickAgain,
-}: {
-  icon: typeof MapPin;
-  label: string;
-  coords: Coords | null;
-  active: boolean;
-  onPickAgain: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onPickAgain}
-      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left ${
-        active ? "border-ink bg-surface-muted" : "border-line"
-      }`}
-    >
-      <Icon className="size-4 shrink-0 text-ink-muted" aria-hidden />
-      <span className="min-w-0">
-        <span className="block text-xs font-semibold tracking-wide text-ink-subtle uppercase">{label}</span>
-        <span className="block truncate font-mono text-xs">
-          {coords ? formatCoords(coords.latitude, coords.longitude) : active ? "Tap the map" : "Not set"}
-        </span>
-      </span>
-    </button>
-  );
 }
 
 function ZoneList({ zones, highlighted }: { zones: DangerZone[]; highlighted: number[] }) {

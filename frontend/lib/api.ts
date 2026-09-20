@@ -1,3 +1,4 @@
+import type { Place } from "@/lib/places";
 import type { AiSuggestion, Coords, NewReport, Report, ReportChanges, SystemHealth } from "@/lib/reports";
 import type { DangerZone, SafeRoute } from "@/lib/zones";
 
@@ -78,4 +79,7 @@ export const api = {
   listZones: () => request<DangerZone[]>("/zones"),
   // Ways to travel from one place to another, marked with the danger areas they cross.
   safeRoute: (start: Coords, end: Coords) => send<SafeRoute>("/routes/safe", "POST", { start, end }),
+  // Find a place by name, for the route planner's From and To boxes. Capitals don't matter.
+  searchPlaces: (query: string, signal?: AbortSignal) =>
+    request<Place[]>(`/places?q=${encodeURIComponent(query)}`, { signal }),
 };
