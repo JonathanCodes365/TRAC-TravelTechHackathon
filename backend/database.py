@@ -53,6 +53,33 @@ def add_missing_columns():
                 connection.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {column_sql}"))
 
 
+# Columns that were renamed as the project grew. Renaming a column in the model adds a new,
+# empty column to an existing database and leaves the old one behind with all the data, so
+# the values are copied across once. (latitude/longitude became the incident's position.)
+RENAMED_COLUMNS = {
+    "reports": [("latitude", "incident_latitude"), ("longitude", "incident_longitude")],
+}
+
+
+def copy_renamed_columns():
+    inspector = inspect(engine)
+    for table_name, renames in RENAMED_COLUMNS.items():
+        if not inspector.has_table(table_name):
+            continue
+        columns = {column["name"] for column in inspector.get_columns(table_name)}
+        for old_name, new_name in renames:
+            if old_name not in columns or new_name not in columns:
+                continue
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        f"UPDATE {table_name} SET {new_name} = {old_name} "
+                        f"WHERE {new_name} IS NULL AND {old_name} IS NOT NULL"
+                    )
+                )
+
+
 Base.metadata.create_all(bind=engine)
 #bind = engine means whenever you create a session use this engine to comms with the DB.
 add_missing_columns()
+copy_renamed_columns()
