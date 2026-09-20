@@ -30,7 +30,7 @@ export default function ReportEditor({ report, onDone }: { report: Report; onDon
   const [message, setMessage] = useState(report.message);
   const [location, setLocation] = useState(report.location ?? "");
   const [coords, setCoords] = useState<Coords | null>(
-    hasCoords(report) ? { latitude: report.latitude, longitude: report.longitude } : null,
+    hasCoords(report) ? { latitude: report.incident_latitude, longitude: report.incident_longitude } : null,
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,9 +49,9 @@ export default function ReportEditor({ report, onDone }: { report: Report; onDon
     if (place !== report.location) changes.location = place;
     const latitude = coords?.latitude ?? null;
     const longitude = coords?.longitude ?? null;
-    if (latitude !== report.latitude || longitude !== report.longitude) {
-      changes.latitude = latitude;
-      changes.longitude = longitude;
+    if (latitude !== report.incident_latitude || longitude !== report.incident_longitude) {
+      changes.incident_latitude = latitude;
+      changes.incident_longitude = longitude;
     }
 
     if (Object.keys(changes).length === 0) {

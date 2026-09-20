@@ -90,7 +90,7 @@ function ReportCard({
   const created = parseDate(report.created_at);
   const place =
     report.location ??
-    (hasCoords(report) ? formatCoords(report.latitude, report.longitude) : "No location given");
+    (hasCoords(report) ? formatCoords(report.incident_latitude, report.incident_longitude) : "No location given");
 
   return (
     <button

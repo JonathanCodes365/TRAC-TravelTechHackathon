@@ -35,7 +35,7 @@ export default function ReportsMap({ reports, selectedId = null, onSelect, showL
         {pins.map((report) => {
           const color = TYPE_INFO[report.type].color;
           const selected = report.id === selectedId;
-          const center: [number, number] = [report.latitude, report.longitude];
+          const center: [number, number] = [report.incident_latitude, report.incident_longitude];
           return (
             <Fragment key={report.id}>
               {isUrgent(report) && (
@@ -116,10 +116,10 @@ function FitToPins({ pins }: { pins: PinnedReport[] }) {
     if (fitted.current || pins.length === 0) return;
     fitted.current = true;
     if (pins.length === 1) {
-      map.setView([pins[0].latitude, pins[0].longitude], 13);
+      map.setView([pins[0].incident_latitude, pins[0].incident_longitude], 13);
     } else {
       map.fitBounds(
-        pins.map((p) => [p.latitude, p.longitude] as [number, number]),
+        pins.map((p) => [p.incident_latitude, p.incident_longitude] as [number, number]),
         { padding: [48, 48], maxZoom: 13 },
       );
     }
@@ -132,8 +132,8 @@ function FitToPins({ pins }: { pins: PinnedReport[] }) {
 function FlyToSelected({ pins, selectedId }: { pins: PinnedReport[]; selectedId: number | null }) {
   const map = useMap();
   const target = pins.find((p) => p.id === selectedId);
-  const lat = target?.latitude;
-  const lng = target?.longitude;
+  const lat = target?.incident_latitude;
+  const lng = target?.incident_longitude;
 
   useEffect(() => {
     if (lat === undefined || lng === undefined) return;
