@@ -1,12 +1,13 @@
 # TRAC frontend
 
-Next.js 16 app for TRAC. It has three pages:
+Next.js 16 app for TRAC. It has four pages:
 
 - `/`: send a report. Pick a type, describe what's happening, and mark the spot with GPS or by tapping the map. While you type, the AI suggests the report type and picks out the people count and the place.
-- `/dashboard`: the coordinator view. Live counts, filters, search, and a map of every report. A side panel lets coordinators change a report's status, edit or delete it, and review the AI's findings, including Merge / Not a duplicate for possible duplicates.
+- `/safe-route`: plan a way past the trouble. Set where you are and where you're going, and the page shows the danger areas, how far the route runs inside them, and a way around when one exists. It offers to check again when the danger areas move.
+- `/dashboard`: the coordinator view. Live counts, filters, search, and a map of every report with the danger areas drawn on it. The strip at the top lists the active areas, and picking one zooms the map to it. A side panel lets coordinators change a report's status, edit or delete it, and review the AI's findings, including Merge / Not a duplicate for possible duplicates.
 - `/reports/[id]`: the tracking page for one report. It updates by itself when a coordinator changes the status.
 
-Data refreshes every 10 seconds, and every 2 seconds while the AI is still checking a report. The header shows whether the backend, the database and the AI service are working. The layout works on phones and follows the device's light or dark mode.
+Data refreshes every 10 seconds (danger areas every 20), and every 2 seconds while the AI is still checking a report. The header shows whether the backend, the database and the AI service are working. The layout works on phones and follows the device's light or dark mode.
 
 ## Run it
 
@@ -38,10 +39,12 @@ and restart `npm run dev`.
 
 ## Where things are
 
-- `app/`: the pages (`page.tsx`, `dashboard/`, `reports/[id]/`)
-- `components/dashboard/`: dashboard parts (stat cards, filters, report list, side panel)
+- `app/`: the pages (`page.tsx`, `safe-route/`, `dashboard/`, `reports/[id]/`)
+- `components/dashboard/`: dashboard parts (stat cards, filters, report list, side panel, the danger area strip)
 - `components/report/`: report details, AI insights, the status/edit/delete controls, and the tracking page
+- `components/SafeRoutePlanner.tsx`: the route planner
 - `components/map/`: the Leaflet maps, which load only in the browser
 - `lib/api.ts`: calls to the backend
 - `lib/hooks.ts`: live data (SWR), AI suggestions, system health, and report actions
 - `lib/reports.ts`: report types, labels and colors
+- `lib/zones.ts`: danger areas and routes — severities, hazard labels and formatting
