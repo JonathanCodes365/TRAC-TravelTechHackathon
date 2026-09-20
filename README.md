@@ -40,6 +40,8 @@ Nobody declares a disaster by hand. The backend keeps the map of danger areas up
 
 An area grows, moves, changes severity or quietens down on its own as reports come in and get old. Areas that stop being reported become inactive but stay on record.
 
+You say where you are and where you're going either by typing the name — which matches the danger areas and the places on existing reports first, whatever the capitals, then OpenStreetMap for everywhere else — or by tapping the map. Coordinates pasted straight in work as well.
+
 For a route, the backend asks OSRM for the ways from A to B, then measures how far each one runs **inside** each danger area, in steps of about a kilometre. Routes are ranked on time and danger together: a kilometre inside a watch area counts like 10 extra minutes of driving, and a critical one like 30. If every road on offer goes through an area, the backend steers its own detours around the worst one and keeps them only when they genuinely cut the distance spent in danger — on a road with no alternative, it says so plainly rather than inventing a longer route that rejoins the same road.
 
 ## What's in the repo
@@ -108,6 +110,8 @@ All settings are optional. Copy the example files and edit them:
   - `DISASTER_FEED`: set to `off` to ignore the earthquake feed.
   - `DISASTER_FEED_URL` and `DISASTER_FEED_SECONDS`: which feed to read and how often (default: USGS magnitude 4.5+, every 600 seconds).
   - `ROUTING_URL`: the OSRM server used for routes (default: the public demo server, which is rate limited — point this at your own OSRM for anything real).
+  - `GEOCODER`: set to `off` to look places up only among the ones TRAC already knows.
+  - `GEOCODER_URL` and `GEOCODER_USER_AGENT`: which geocoder turns typed place names into coordinates (default: OpenStreetMap's Nominatim, which asks callers to identify themselves and to stay under one request a second).
 - `ai-service/.env` (from `ai-service/.env.example`): `AI_PROVIDER` and an API key, to read reports with a language model instead of keyword rules.
 - `frontend/.env.local`: `API_URL`, to use a backend somewhere else (default `http://localhost:8000`).
 
@@ -129,6 +133,7 @@ The `.env` files stay out of git.
 | `GET /zones` | The disaster areas being tracked. `?active=false` includes the ones that have quietened down. |
 | `POST /zones/refresh` | Work the areas out again straight away. `?feed=false` skips the earthquake feed. |
 | `POST /routes/safe` | Routes from A to B, marked with the danger areas they cross: `{"start": {"latitude": 27.71, "longitude": 85.32}, "end": {...}}`. 503 if the routing service can't be reached. |
+| `GET /places?q=` | Find a place by name for the route planner. Capitals don't matter, and typed coordinates ("27.7172, 85.3240") work too. |
 
 A report looks like this:
 
