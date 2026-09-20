@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { CircleCheck, CircleX, LayoutDashboard, LoaderCircle, Radio, Send } from "lucide-react";
+import { CircleCheck, CircleX, LayoutDashboard, LoaderCircle, Radio, Route, Send } from "lucide-react";
 import { useSystemHealth } from "@/lib/hooks";
 
 const LINKS = [
   { href: "/", label: "Report", icon: Send },
+  { href: "/safe-route", label: "Safe route", icon: Route },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
 ];
 
@@ -37,12 +38,13 @@ export default function SiteHeader() {
                   key={href}
                   href={href}
                   aria-current={active ? "page" : undefined}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors ${
+                  aria-label={label}
+                  className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors sm:px-3 ${
                     active ? "bg-surface text-ink shadow-sm" : "text-ink-muted hover:text-ink"
                   }`}
                 >
                   <Icon className="size-4" aria-hidden />
-                  {label}
+                  <span className="hidden sm:inline">{label}</span>
                 </Link>
               );
             })}
