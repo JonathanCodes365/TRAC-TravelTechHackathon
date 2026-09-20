@@ -175,6 +175,17 @@ class Point(BaseModel):
     longitude: float = Field(ge=-180, le=180)
 
 
+class Place(BaseModel):
+    # A place someone typed the name of, matched to a spot on the map.
+    name: str
+    # Where it is, or why TRAC knows it: "Dhading, Bagmati, Nepal", "3 reports from here".
+    detail: Optional[str] = None
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    # Where the match came from: typed coordinates, a danger area, earlier reports, the map.
+    source: Literal["coordinates", "zone", "report", "map"]
+
+
 class RouteRequest(BaseModel):
     # Where someone is and where they want to go, to find a way around the danger areas.
     start: Point

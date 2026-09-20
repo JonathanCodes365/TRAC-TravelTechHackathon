@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from fastapi import FastAPI, Depends , HTTPException, BackgroundTasks
 #import fastapi so that python can create a web api.
 from backend.schemas import Report,Reporttype,ReportResponse,ReportStatus,ReportUpdate
-from backend.schemas import DangerZone,RouteRequest,RouteResponse
+from backend.schemas import DangerZone,Place,RouteRequest,RouteResponse
 
 #Now ,we want to sure that our API endpoints get access to the Session-->database.
 #get_db is the function which contais db which is an object of sessionLocal() and it calls it
@@ -19,6 +19,7 @@ from backend.models import ReportModel, DangerZoneModel
 # Talks to the AI service (ai-service/, port 8001) for the backend.
 from backend import ai
 # Finds disaster areas and plans routes around them.
+from backend import places
 from backend import zones
 from sqlalchemy import text
 
@@ -222,6 +223,13 @@ def refresh_zones(feed: bool = True, db: Session = Depends(get_db)):
     # Run the detection right now instead of waiting for the timer.
     zones.refresh_all(db, include_feed=feed)
     return zones.active_zones(db)
+
+
+@app.get("/places", response_model=list[Place])
+def find_places(q: str = "", limit: int = 8, db: Session = Depends(get_db)):
+    # Turns a typed place name into coordinates for the route planner. Matches the
+    # danger areas and the places on existing reports first, then OpenStreetMap.
+    return places.search(db, q, limit=max(1, min(limit, 15)))
 
 
 @app.post("/routes/safe", response_model=RouteResponse)
