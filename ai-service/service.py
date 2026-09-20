@@ -9,6 +9,7 @@ import joblib
 from extraction import extract as run_extraction, extraction_mode
 from features import build_feature_vector
 from report_features import build_report_feature_vector
+from zones import detect_zones
 
 app = FastAPI(title="TRAC AI Service")
 
@@ -119,6 +120,31 @@ def check_report_duplicate_endpoint(req: ReportDuplicateCheckRequest):
 
     results.sort(key=lambda r: r["probability"], reverse=True)
     return {"matches": results}
+
+
+class ZoneReport(BaseModel):
+    id: Optional[str] = None
+    type: Optional[str] = None
+    message: Optional[str] = None
+    location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    people_count: Optional[int] = None
+    time: Optional[str] = None
+
+
+class DetectZonesRequest(BaseModel):
+    reports: List[ZoneReport]
+    # "now" and the window decide which reports still count as current.
+    now: Optional[str] = None
+    window_hours: float = Field(default=12, gt=0, le=168)
+
+
+@app.post("/detect-zones")
+def detect_zones_endpoint(req: DetectZonesRequest):
+    # Group recent reports into disaster areas: where, what kind, and how serious (zones.py).
+    zones = detect_zones([report.model_dump() for report in req.reports], now=req.now, window_hours=req.window_hours)
+    return {"zones": zones}
 
 
 @app.get("/health")
