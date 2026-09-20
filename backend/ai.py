@@ -64,6 +64,12 @@ def extract(text: str) -> dict:
     return _post("/extract", {"report_text": text})
 
 
+def detect_zones(reports: list[dict], window_hours: float) -> list[dict]:
+    """Ask the AI to group recent reports into disaster areas (see ai-service/zones.py)."""
+    answer = _post("/detect-zones", {"reports": reports, "window_hours": window_hours})
+    return answer.get("zones", [])
+
+
 def suggested_type(extracted: dict) -> Reporttype | None:
     """The report type the AI suggests: its report_type if it gave a valid one,
     otherwise a translation of the person status it found."""
@@ -85,12 +91,23 @@ def person_name(value) -> str | None:
     return value.strip()[:120] if isinstance(value, str) and value.strip() else None
 
 
-def _utc_iso(value: datetime | None) -> str | None:
+def utc_iso(value: datetime | None) -> str | None:
     if value is None:
         return None
     if value.tzinfo is None:  # SQLite drops the timezone; we always store UTC
         value = value.replace(tzinfo=timezone.utc)
     return value.isoformat()
+
+
+def parse_iso(value) -> datetime | None:
+    """A time from the AI service (or any ISO text) as a UTC datetime."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 def _as_record(report: ReportModel) -> dict:
@@ -100,7 +117,7 @@ def _as_record(report: ReportModel) -> dict:
         "message": report.message,
         "type": report.type.value,
         "location": report.location,
-        "time": _utc_iso(report.created_at),
+        "time": utc_iso(report.created_at),
     }
 
 
@@ -164,6 +181,15 @@ def enrich_report(report_id: int) -> None:
 
         report.ai_state = "done"
         db.commit()
+
+        # A new or changed report can create or grow a disaster area, so check straight away
+        # instead of waiting for the timer. Imported here to avoid a circular import.
+        try:
+            from backend import zones
+
+            zones.refresh_after_report()
+        except Exception as error:
+            print(f"[ai] report #{report_id}: couldn't update disaster areas ({error})")
     except Exception as error:  # e.g. the report was deleted while the AI was working
         db.rollback()
         print(f"[ai] report #{report_id}: couldn't save AI results ({error})")

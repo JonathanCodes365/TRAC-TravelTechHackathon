@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 #ensuring we can use Base to point that whoever inherits from Base will be a model.
-from sqlalchemy import DateTime, String, Enum
+from sqlalchemy import Boolean, DateTime, String, Enum
 #postgresql has many types of column such as VARCHAR, TEXT, Integer, boolean etc.
 #we need to make sure that the column uses String
 
@@ -68,3 +68,40 @@ class ReportModel(Base):
     duplicate_of: Mapped[int | None] = mapped_column(nullable=True)
     duplicate_score: Mapped[float | None] = mapped_column(nullable=True)
     duplicate_state: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+
+class DangerZoneModel(Base):
+    # An area where something dangerous is happening. Either found in the reports people
+    # send (source "reports", see backend/zones.py) or taken from a public feed of real
+    # events (source "usgs" for earthquakes). Routes are planned around these areas.
+    __tablename__ = "danger_zones"
+    __table_args__ = {"sqlite_autoincrement": True}
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(20))
+    hazard: Mapped[str] = mapped_column(String(30))  # flood, landslide, earthquake, ...
+    severity: Mapped[str] = mapped_column(String(20))  # watch, warning, critical
+    title: Mapped[str] = mapped_column(String(200))
+    summary: Mapped[str | None] = mapped_column(String(400), nullable=True)
+
+    center_latitude: Mapped[float] = mapped_column()
+    center_longitude: Mapped[float] = mapped_column()
+    radius_km: Mapped[float] = mapped_column()
+
+    report_count: Mapped[int] = mapped_column(default=0, server_default="0")
+    people_count: Mapped[int | None] = mapped_column(nullable=True)
+    confidence: Mapped[float | None] = mapped_column(nullable=True)
+    magnitude: Mapped[float | None] = mapped_column(nullable=True)  # earthquakes only
+
+    external_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    external_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+    event_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_seen: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    # An area stops being active when its reports stop coming in, or the event drops out of the feed.
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")

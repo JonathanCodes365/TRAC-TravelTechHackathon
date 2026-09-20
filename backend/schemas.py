@@ -137,3 +137,68 @@ class ReportResponse(BaseModel):
         return value
 
 #here we create our pydantic checking for the incoming info:
+
+
+class DangerZone(BaseModel):
+    # An area where something dangerous is happening (see backend/zones.py).
+    id: int
+    source: Literal["reports", "usgs"]
+    hazard: str
+    severity: Literal["watch", "warning", "critical"]
+    title: str
+    summary: Optional[str] = None
+    center_latitude: float
+    center_longitude: float
+    radius_km: float
+    report_count: int = 0
+    people_count: Optional[int] = None
+    confidence: Optional[float] = None
+    magnitude: Optional[float] = None
+    external_url: Optional[str] = None
+    event_time: Optional[datetime] = None
+    first_seen: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    active: bool = True
+
+    model_config = {"from_attributes": True}
+
+    @field_validator("event_time", "first_seen", "updated_at")
+    @classmethod
+    def times_are_utc(cls, value):
+        if value is not None and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+
+class Point(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+
+class RouteRequest(BaseModel):
+    # Where someone is and where they want to go, to find a way around the danger areas.
+    start: Point
+    end: Point
+
+
+class RouteOption(BaseModel):
+    label: str  # "Safest route", "Fastest route", ...
+    distance_km: float
+    duration_min: float
+    # The line to draw on the map, as [latitude, longitude] pairs.
+    geometry: list[list[float]]
+    # Ids of the danger areas this route goes through; empty means it stays clear of them.
+    zones: list[int] = []
+    # How far the route travels inside danger areas, in kilometres.
+    zone_km: float = 0
+    risk: Literal["clear", "passes_zone"]
+    recommended: bool = False
+
+
+class RouteResponse(BaseModel):
+    routes: list[RouteOption]
+    zones: list[DangerZone]
+    advice: str
+    # Areas around the start or the destination: no route can avoid these.
+    start_zones: list[int] = []
+    end_zones: list[int] = []

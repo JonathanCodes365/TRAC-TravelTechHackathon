@@ -1,8 +1,12 @@
+import asyncio
+from contextlib import asynccontextmanager
+
 from pydantic import BaseModel, Field
 
 from fastapi import FastAPI, Depends , HTTPException, BackgroundTasks
 #import fastapi so that python can create a web api.
 from backend.schemas import Report,Reporttype,ReportResponse,ReportStatus,ReportUpdate
+from backend.schemas import DangerZone,RouteRequest,RouteResponse
 
 #Now ,we want to sure that our API endpoints get access to the Session-->database.
 #get_db is the function which contais db which is an object of sessionLocal() and it calls it
@@ -10,16 +14,26 @@ from backend.database import get_db
 #Session is us doing groundwork and saying we are going to ensure sessions to our endpoints here.
 from sqlalchemy.orm import Session
 
-from backend.models import ReportModel
+from backend.models import ReportModel, DangerZoneModel
 
 # Talks to the AI service (ai-service/, port 8001) for the backend.
 from backend import ai
+# Finds disaster areas and plans routes around them.
+from backend import zones
 from sqlalchemy import text
 
 #we added CORSMiddleware here
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # While the server runs, keep re-detecting disaster areas from the reports that come
+    # in, and refresh the public earthquake feed (backend/zones.py).
+    watcher = asyncio.create_task(zones.keep_zones_updated())
+    yield
+    watcher.cancel()
+
+app = FastAPI(lifespan=lifespan)
 
 
 class AnalyzeRequest(BaseModel):
@@ -193,6 +207,40 @@ def health(db: Session = Depends(get_db)):
         "ai_extraction": ai_health.get("extraction") if ai_health else None,
     }
 
+@app.get("/zones", response_model=list[DangerZone])
+def list_zones(active: bool = True, db: Session = Depends(get_db)):
+    # Disaster areas for the map: detected in the reports people send, or taken from the
+    # public earthquake feed. active=false also shows areas that have quietened down.
+    query = db.query(DangerZoneModel)
+    if active:
+        query = query.filter(DangerZoneModel.active.is_(True))
+    return query.order_by(DangerZoneModel.updated_at.desc()).all()
+
+
+@app.post("/zones/refresh", response_model=list[DangerZone])
+def refresh_zones(feed: bool = True, db: Session = Depends(get_db)):
+    # Run the detection right now instead of waiting for the timer.
+    zones.refresh_all(db, include_feed=feed)
+    return zones.active_zones(db)
+
+
+@app.post("/routes/safe", response_model=RouteResponse)
+def safe_route(request: RouteRequest, db: Session = Depends(get_db)):
+    # Ways to travel from one place to another, each marked with the danger areas it
+    # passes through, with the clearest one recommended.
+    try:
+        return zones.plan_safe_route(
+            db,
+            (request.start.latitude, request.start.longitude),
+            (request.end.latitude, request.end.longitude),
+        )
+    except zones.RoutingUnavailable as error:
+        raise HTTPException(
+            status_code=503,
+            detail=f"The routing service isn't available right now ({error})."
+        )
+
+
 @app.get("/reports/{report_id}", response_model=ReportResponse)
 # here we are saying this endpoint returns one report,
 # and that response/response_model must follow the ReportResponse schema.
@@ -271,17 +319,8 @@ def receive_reports(report:Report,
     #we want with just applying depends(...)
 
 
-    if report.type  == Reporttype.RESCUE:
-        print("This is an rescue alert!")
-    else:
-        print("XYZ")
-
-    print(report.type)
-    #this gives our enum member..
+    #report.type gives our enum member..
     #we have explicitly stated type to be Reporttype.. in our schemas.py
-    
-    print(report.message)
-    print(report.location)
     #ReportModel is from our models.py which means it is a SQL alchemy model
     #since we are doing new_report = ReportModel(....)
     #This means we are making new_report it's object and calling it ...
