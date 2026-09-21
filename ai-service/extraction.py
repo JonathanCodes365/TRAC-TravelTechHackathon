@@ -80,8 +80,40 @@ REPORT_TYPE_PATTERNS = [
     ("safe", r"\b(?:safe|rescued|evacuated|reached (?:the )?shelter|everyone is (?:ok|okay|fine)|all (?:ok|okay|fine)|we are (?:ok|okay|fine))\b"),
 ]
 
+# Words that describe vehicles or transport, not geographic locations.
+TRANSPORT_WORDS = {
+    "bus",
+    "car",
+    "taxi",
+    "jeep",
+    "van",
+    "train",
+    "plane",
+    "airplane",
+    "helicopter",
+    "bike",
+    "bicycle",
+    "motorcycle",
+}
 # Nouns that count people, as in "3 trekkers" or "two climbers".
 PEOPLE_WORDS = r"(?:tourists?|people|persons?|travell?ers?|hikers?|trekkers?|climbers?|passengers?|students?|children|kids?|members?|porters?|guides?|visitors?|adults?|men|women|friends?)"
+
+def _location(report_text: str):
+    # Find phrases following location-related words.
+    candidates = re.findall(
+        r"\b(?:near|at|in|around)\s+([A-Za-z][A-Za-z]*)",
+        report_text,
+        re.IGNORECASE,
+    )
+
+    # Check each candidate and ignore obvious transport words.
+    for candidate in candidates:
+        if candidate.lower() in TRANSPORT_WORDS:
+            continue
+
+        return candidate.strip()
+
+    return None
 
 
 def _report_type(text: str):
@@ -154,13 +186,7 @@ def _mock_extract(report_text: str) -> dict:
             people_count = int(value) if value.isdigit() else number_words[value]
 
     # Detect a location after words such as "near", "at", "in", or "around".
-    location_match = re.search(
-        r"\b(?:near|at|in|around)\s+([A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*)*)",
-        report_text,
-        re.IGNORECASE
-    )
-
-    location = location_match.group(1) if location_match else None
+    location = _location(report_text)
 
     # Detect simple AM/PM times.
     time_match = re.search(
