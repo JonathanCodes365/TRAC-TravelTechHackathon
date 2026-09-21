@@ -81,7 +81,7 @@ def _from_reports(db, needle: str) -> list[dict]:
         .filter(ReportModel.location.isnot(None))
         .filter(ReportModel.incident_latitude.isnot(None))
         .filter(func.lower(ReportModel.location).like(needle))
-        .group_by(func.lower(ReportModel.location))
+        .group_by(ReportModel.location)
         .order_by(func.count(ReportModel.id).desc())
         .limit(5)
         .all()
